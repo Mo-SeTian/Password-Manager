@@ -1,14 +1,17 @@
 package com.mosetian.passwordmanager.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val DarkScheme = darkColorScheme(
     primary = ElectricBlue,
@@ -17,14 +20,16 @@ private val DarkScheme = darkColorScheme(
     background = AmoledBackground,
     surface = DeepSurface,
     surfaceContainer = SurfaceRaised,
-    surfaceContainerHigh = SurfaceRaised,
-    surfaceVariant = SurfaceRail,
+    surfaceContainerHigh = SurfaceHigher,
+    surfaceVariant = SurfaceGlass,
+    outlineVariant = OutlineSoft,
     onPrimary = Color.Black,
     onBackground = SoftText,
     onSurface = SoftText,
     onSurfaceVariant = MutedText,
     primaryContainer = ElectricBlue.copy(alpha = 0.20f),
-    secondaryContainer = EmeraldAccent.copy(alpha = 0.18f)
+    secondaryContainer = EmeraldAccent.copy(alpha = 0.18f),
+    tertiaryContainer = VioletAccent.copy(alpha = 0.18f)
 )
 
 private val AppShapes = Shapes(
@@ -35,6 +40,41 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
+private val AppTypography = Typography(
+    headlineSmall = TextStyle(
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp
+    ),
+    titleMedium = TextStyle(
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.sp
+    ),
+    bodyLarge = TextStyle(
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        fontWeight = FontWeight.Normal
+    ),
+    bodyMedium = TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        fontWeight = FontWeight.Normal
+    ),
+    labelLarge = TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+        fontWeight = FontWeight.Medium
+    ),
+    labelMedium = TextStyle(
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        fontWeight = FontWeight.Medium
+    )
+)
+
 @Composable
 fun PasswordManagerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -43,7 +83,7 @@ fun PasswordManagerTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkScheme else DarkScheme,
         shapes = AppShapes,
-        typography = Typography(),
+        typography = AppTypography,
         content = content
     )
 }

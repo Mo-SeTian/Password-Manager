@@ -1,12 +1,14 @@
 package com.mosetian.passwordmanager.feature.vault
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -142,7 +145,21 @@ fun VaultScreen(
         onSearchQueryChange = { searchQuery = it },
         onEntryClick = { selectedEntryId = it },
         onAddEntry = { editorForm = EntryEditorForm() },
-        onEditEntry = { editorForm = EntryEditorForm(id = uiState.selectedEntry?.id ?: "") },
+        onEditEntry = {
+            uiState.selectedEntry?.let { detail ->
+                editorForm = EntryEditorForm(
+                    id = detail.id,
+                    name = detail.name,
+                    iconEmoji = detail.iconEmoji,
+                    username = detail.username,
+                    password = detail.password,
+                    website = detail.website.orEmpty(),
+                    note = detail.note.orEmpty(),
+                    customFieldLabel = detail.customFields.firstOrNull()?.label.orEmpty(),
+                    customFieldValue = detail.customFields.firstOrNull()?.value.orEmpty()
+                )
+            }
+        },
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
         onDismissDetail = { selectedEntryId = null },
         onDismissEditor = { editorForm = null },
@@ -229,14 +246,20 @@ private fun VaultScreenContent(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddEntry) {
+            FloatingActionButton(
+                onClick = onAddEntry,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
                 Icon(Icons.Rounded.Add, contentDescription = "新增凭据")
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 LeftGroupsPane(
@@ -301,37 +324,52 @@ private fun LeftGroupsPane(
     onManageGroups: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxHeight().width(108.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 6.dp
+        modifier = Modifier.fillMaxHeight().width(112.dp),
+        shape = RoundedCornerShape(30.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp
     ) {
         Column {
             IconButton(
                 onClick = onManageGroups,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp)
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp)
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "管理分组")
+                Icon(Icons.Rounded.Add, contentDescription = "管理分组", tint = MaterialTheme.colorScheme.primary)
             }
             LazyColumn(
-                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(groups) { group ->
                     val selected = group.id == selectedGroup
-                    val scale by animateFloatAsState(if (selected) 1.03f else 1f, label = "group_scale")
+                    val scale by animateFloatAsState(if (selected) 1.035f else 1f, label = "group_scale")
                     Surface(
-                        modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(RoundedCornerShape(24.dp)).clickable { onGroupClick(group.id) },
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(24.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { scaleX = scale; scaleY = scale }
+                            .clip(RoundedCornerShape(26.dp))
+                            .clickable { onGroupClick(group.id) },
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(26.dp),
+                        tonalElevation = if (selected) 6.dp else 1.dp,
+                        shadowElevation = if (selected) 10.dp else 0.dp
                     ) {
-                        Column(modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(group.icon, contentDescription = group.name, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(
+                            modifier = Modifier.padding(vertical = 15.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = group.icon,
+                                contentDescription = group.name,
+                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(group.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(6.dp))
-                            Badge { Text(group.count.toString()) }
+                            Badge(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh) {
+                                Text(group.count.toString())
+                            }
                         }
                     }
                 }
@@ -351,12 +389,18 @@ private fun RightEntriesList(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(modifier = modifier.fillMaxHeight(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        shape = RoundedCornerShape(30.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
+        shadowElevation = 10.dp
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("我的凭据", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        Text("我的凭据", style = MaterialTheme.typography.headlineSmall)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             if (searchQuery.isBlank()) "极简、安全、专注的名称列表" else "当前搜索到 ${entries.size} 条结果",
@@ -364,8 +408,8 @@ private fun RightEntriesList(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = onToggleSearch) { Icon(Icons.Rounded.Search, contentDescription = "搜索") }
-                    IconButton(onClick = onAddClick) { Icon(Icons.Rounded.Add, contentDescription = "新增") }
+                    IconButton(onClick = onToggleSearch) { Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary) }
+                    IconButton(onClick = onAddClick) { Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary) }
                 }
                 AnimatedVisibility(visible = searchMode) {
                     OutlinedTextField(
@@ -373,24 +417,41 @@ private fun RightEntriesList(
                         onValueChange = onSearchQueryChange,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         label = { Text("搜索凭据名称") },
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(22.dp)
                     )
                 }
             }
             if (entries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            if (searchQuery.isBlank()) "你可以点击右上角的新增按钮创建第一条凭据" else "试试更短的关键词，或者换一个分组看看",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                        tonalElevation = 2.dp,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 28.dp, vertical = 30.dp)
+                        ) {
+                            Text("🫧", style = MaterialTheme.typography.headlineSmall)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                if (searchQuery.isBlank()) "你可以点击右上角的新增按钮创建第一条凭据" else "试试更短的关键词，或者换一个分组看看",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             } else {
-                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(entries) { entry -> EntryNameCard(entry = entry, onClick = { onEntryClick(entry.id) }) }
                 }
             }
@@ -400,9 +461,28 @@ private fun RightEntriesList(
 
 @Composable
 private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 2.dp) {
-        Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(modifier = Modifier.size(42.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+    val elevation by animateDpAsState(targetValue = 4.dp, label = "entry_elevation")
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(26.dp)),
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = elevation,
+        shadowElevation = 6.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
                 Box(contentAlignment = Alignment.Center) { Text(entry.iconEmoji) }
             }
             Spacer(modifier = Modifier.width(14.dp))
@@ -415,22 +495,32 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
 
 @Composable
 private fun EntryDetailOverlay(entry: EntryDetailUiModel, onDismiss: () -> Unit, onEdit: () -> Unit, onCopy: (String, String) -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.60f)).clickable(
-        interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss
-    )) {
-        Surface(modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f).fillMaxHeight(0.82f), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 10.dp, shadowElevation = 20.dp) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.52f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+    ) {
+        Surface(
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f).fillMaxHeight(0.82f),
+            shape = RoundedCornerShape(30.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 12.dp,
+            shadowElevation = 24.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(48.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Surface(modifier = Modifier.size(52.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                         Box(contentAlignment = Alignment.Center) { Text(entry.iconEmoji) }
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        Text(entry.name, style = MaterialTheme.typography.headlineSmall)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("点击字段值即可复制", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑") }
+                    IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary) }
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
@@ -464,14 +554,14 @@ private fun EntryEditorDialog(form: EntryEditorForm, onDismiss: () -> Unit, onFo
         title = { Text(if (form.id == null) "新增凭据" else "编辑凭据") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("名称") }, singleLine = true)
-                OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji") }, singleLine = true)
-                OutlinedTextField(form.username, { onFormChange(form.copy(username = it)) }, label = { Text("账号") }, singleLine = true)
-                OutlinedTextField(form.password, { onFormChange(form.copy(password = it)) }, label = { Text("密码") }, singleLine = true)
-                OutlinedTextField(form.website, { onFormChange(form.copy(website = it)) }, label = { Text("网址") }, singleLine = true)
-                OutlinedTextField(form.note, { onFormChange(form.copy(note = it)) }, label = { Text("备注") }, minLines = 3)
-                OutlinedTextField(form.customFieldLabel, { onFormChange(form.copy(customFieldLabel = it)) }, label = { Text("自定义字段名称") }, singleLine = true)
-                OutlinedTextField(form.customFieldValue, { onFormChange(form.copy(customFieldValue = it)) }, label = { Text("自定义字段值") }, singleLine = true)
+                OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.username, { onFormChange(form.copy(username = it)) }, label = { Text("账号") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.password, { onFormChange(form.copy(password = it)) }, label = { Text("密码") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.website, { onFormChange(form.copy(website = it)) }, label = { Text("网址") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.note, { onFormChange(form.copy(note = it)) }, label = { Text("备注") }, minLines = 3, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.customFieldLabel, { onFormChange(form.copy(customFieldLabel = it)) }, label = { Text("自定义字段名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.customFieldValue, { onFormChange(form.copy(customFieldValue = it)) }, label = { Text("自定义字段值") }, singleLine = true, shape = RoundedCornerShape(20.dp))
             }
         }
     )
@@ -486,9 +576,9 @@ private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFo
         title = { Text("新建分组") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("分组名称") }, singleLine = true)
-                OutlinedTextField(form.key, { onFormChange(form.copy(key = it)) }, label = { Text("分组键值（可选）") }, singleLine = true)
-                OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji（预留）") }, singleLine = true)
+                OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("分组名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.key, { onFormChange(form.copy(key = it)) }, label = { Text("分组键值（可选）") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji（预留）") }, singleLine = true, shape = RoundedCornerShape(20.dp))
             }
         }
     )
@@ -498,7 +588,11 @@ private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFo
 private fun CopyableField(label: String, value: String, onCopy: (String, String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(22.dp)),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
+        ) {
             Row(modifier = Modifier.fillMaxWidth().clickable { onCopy(label, value) }.padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Spacer(modifier = Modifier.width(12.dp))
@@ -514,7 +608,11 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
     val displayValue = if (visible) value else "•".repeat(maxOf(8, value.length.coerceAtMost(16)))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(22.dp)),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
+        ) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(displayValue, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).clickable { onCopy(label, value) })
                 IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = if (visible) "隐藏密码" else "显示密码") }
@@ -528,7 +626,11 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
 private fun StaticField(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(22.dp)),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
+        ) {
             Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp))
         }
     }
