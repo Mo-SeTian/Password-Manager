@@ -126,7 +126,7 @@ private fun layoutDensityOf(value: Float): VaultLayoutDensity {
 fun VaultScreen(
     repository: VaultRepository = remember { InMemoryVaultRepository() },
     initialSecuritySettings: SecuritySettings = SecuritySettings(),
-    initialUiScale: Float = 1.0f,
+    initialUiScale: Float = 0.48f,
     onSecuritySettingsChange: (SecuritySettings) -> Unit = {},
     onUiScaleChange: (Float) -> Unit = {}
 ) {
@@ -418,53 +418,66 @@ private fun LeftGroupsPane(
         tonalElevation = 8.dp,
         shadowElevation = 12.dp
     ) {
-        Column {
-            Row(
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                IconButton(onClick = onManageGroups) {
-                    Icon(Icons.Rounded.Add, contentDescription = "管理分组", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = onOpenSecurityPanel) {
-                    Icon(Icons.Rounded.Lock, contentDescription = "安全设置", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
+        Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
-                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 10.dp),
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 10.dp, horizontal = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(layoutDensity.groupItemSpacing)
             ) {
                 items(groups) { group ->
                     val selected = group.id == selectedGroup
-                    val scale by animateFloatAsState(if (selected) 1.035f else 1f, label = "group_scale")
+                    val scale by animateFloatAsState(if (selected) 1.012f else 1f, label = "group_scale")
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(RoundedCornerShape(26.dp))
+                            .clip(RoundedCornerShape(layoutDensity.paneCorner - 4.dp))
                             .clickable { onGroupClick(group.id) },
                         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(26.dp),
+                        shape = RoundedCornerShape(layoutDensity.paneCorner - 4.dp),
                         tonalElevation = if (selected) 6.dp else 1.dp,
                         shadowElevation = if (selected) 10.dp else 0.dp
                     ) {
                         Column(
-                            modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 8.dp),
+                            modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                imageVector = group.icon,
-                                contentDescription = group.name,
-                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            Text(
+                                group.name,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(group.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(6.dp))
                             Badge(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh) {
                                 Text(group.count.toString())
                             }
                         }
                     }
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = onManageGroups,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("添加分组")
+                }
+                TextButton(
+                    onClick = onOpenSecurityPanel,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("安全设置")
                 }
             }
         }
