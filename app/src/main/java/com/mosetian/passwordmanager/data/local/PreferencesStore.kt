@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -11,14 +12,39 @@ private val Context.appPreferences by preferencesDataStore(name = "password_mana
 
 class PreferencesStore(private val context: Context) {
     private val darkModeKey = booleanPreferencesKey("dark_mode")
+    private val appLockEnabledKey = booleanPreferencesKey("app_lock_enabled")
+    private val biometricUnlockEnabledKey = booleanPreferencesKey("biometric_unlock_enabled")
+    private val autoClearClipboardEnabledKey = booleanPreferencesKey("auto_clear_clipboard_enabled")
+    private val blockScreenshotsEnabledKey = booleanPreferencesKey("block_screenshots_enabled")
+    private val obscureSensitiveContentEnabledKey = booleanPreferencesKey("obscure_sensitive_content_enabled")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
     }
 
+    val securitySettings: Flow<SecuritySettings> = context.appPreferences.data.map { prefs ->
+        SecuritySettings(
+            appLockEnabled = prefs[appLockEnabledKey] ?: false,
+            biometricUnlockEnabled = prefs[biometricUnlockEnabledKey] ?: false,
+            autoClearClipboardEnabled = prefs[autoClearClipboardEnabledKey] ?: true,
+            blockScreenshotsEnabled = prefs[blockScreenshotsEnabledKey] ?: false,
+            obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: true
+        )
+    }
+
     suspend fun setDarkModeEnabled(enabled: Boolean) {
         context.appPreferences.edit { prefs ->
             prefs[darkModeKey] = enabled
+        }
+    }
+
+    suspend fun updateSecuritySettings(settings: SecuritySettings) {
+        context.appPreferences.edit { prefs ->
+            prefs[appLockEnabledKey] = settings.appLockEnabled
+            prefs[biometricUnlockEnabledKey] = settings.biometricUnlockEnabled
+            prefs[autoClearClipboardEnabledKey] = settings.autoClearClipboardEnabled
+            prefs[blockScreenshotsEnabledKey] = settings.blockScreenshotsEnabled
+            prefs[obscureSensitiveContentEnabledKey] = settings.obscureSensitiveContentEnabled
         }
     }
 }

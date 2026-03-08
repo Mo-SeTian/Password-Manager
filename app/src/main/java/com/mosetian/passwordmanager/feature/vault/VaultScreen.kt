@@ -36,8 +36,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -51,6 +53,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -71,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mosetian.passwordmanager.data.vault.InMemoryVaultRepository
 import com.mosetian.passwordmanager.data.vault.VaultRepository
+import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryEditorForm
@@ -92,6 +96,8 @@ fun VaultScreen(
     var groupEditorForm by remember { mutableStateOf<GroupEditorForm?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(false) }
+    var securitySettings by remember { mutableStateOf(SecuritySettings()) }
+    var securityPanelVisible by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -133,6 +139,8 @@ fun VaultScreen(
 
     VaultScreenContent(
         uiState = uiState,
+        securitySettings = securitySettings,
+        securityPanelVisible = securityPanelVisible,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
@@ -161,6 +169,9 @@ fun VaultScreen(
             }
         },
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
+        onOpenSecurityPanel = { securityPanelVisible = true },
+        onDismissSecurityPanel = { securityPanelVisible = false },
+        onSecuritySettingsChange = { securitySettings = it },
         onDismissDetail = { selectedEntryId = null },
         onDismissEditor = { editorForm = null },
         onDismissGroupEditor = { groupEditorForm = null },
@@ -168,7 +179,11 @@ fun VaultScreen(
         onGroupEditorFormChange = { groupEditorForm = it },
         onCopyField = { label, value ->
             clipboardManager.setText(AnnotatedString(value))
-            scope.launch { snackbarHostState.showSnackbar("已复制$label") }
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    if (securitySettings.autoClearClipboardEnabled) "已复制$label（后续将支持自动清空）" else "已复制$label"
+                )
+            }
         },
         onSaveEntry = { form ->
             val targetGroup = when (selectedGroup) {
@@ -225,6 +240,8 @@ fun VaultScreen(
 @Composable
 private fun VaultScreenContent(
     uiState: VaultUiState,
+    securitySettings: SecuritySettings,
+    securityPanelVisible: Boolean,
     snackbarHostState: SnackbarHostState,
     onSelectGroup: (GroupId) -> Unit,
     onToggleSearch: () -> Unit,
@@ -233,6 +250,9 @@ private fun VaultScreenContent(
     onAddEntry: () -> Unit,
     onEditEntry: () -> Unit,
     onOpenGroupEditor: () -> Unit,
+    onOpenSecurityPanel: () -> Unit,
+    onDismissSecurityPanel: () -> Unit,
+    onSecuritySettingsChange: (SecuritySettings) -> Unit,
     onDismissDetail: () -> Unit,
     onDismissEditor: () -> Unit,
     onDismissGroupEditor: () -> Unit,
@@ -257,16 +277,15 @@ private fun VaultScreenContent(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxSize().padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 LeftGroupsPane(
                     groups = uiState.groups,
                     selectedGroup = uiState.selectedGroup,
                     onGroupClick = onSelectGroup,
-                    onManageGroups = onOpenGroupEditor
+                    onManageGroups = onOpenGroupEditor,
+                    onOpenSecurityPanel = onOpenSecurityPanel
                 )
                 RightEntriesList(
                     entries = uiState.visibleEntries,
@@ -290,7 +309,8 @@ private fun VaultScreenContent(
                         entry = entry,
                         onDismiss = onDismissDetail,
                         onEdit = onEditEntry,
-                        onCopy = onCopyField
+                        onCopy = onCopyField,
+                        obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
                     )
                 }
             }
@@ -312,6 +332,14 @@ private fun VaultScreenContent(
                     onSave = onSaveGroup
                 )
             }
+
+            if (securityPanelVisible) {
+                SecuritySettingsDialog(
+                    settings = securitySettings,
+                    onDismiss = onDismissSecurityPanel,
+                    onSettingsChange = onSecuritySettingsChange
+                )
+            }
         }
     }
 }
@@ -321,7 +349,8 @@ private fun LeftGroupsPane(
     groups: List<GroupUiModel>,
     selectedGroup: GroupId,
     onGroupClick: (GroupId) -> Unit,
-    onManageGroups: () -> Unit
+    onManageGroups: () -> Unit,
+    onOpenSecurityPanel: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxHeight().width(112.dp),
@@ -331,11 +360,16 @@ private fun LeftGroupsPane(
         shadowElevation = 12.dp
     ) {
         Column {
-            IconButton(
-                onClick = onManageGroups,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp)
+            Row(
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "管理分组", tint = MaterialTheme.colorScheme.primary)
+                IconButton(onClick = onManageGroups) {
+                    Icon(Icons.Rounded.Add, contentDescription = "管理分组", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onOpenSecurityPanel) {
+                    Icon(Icons.Rounded.Lock, contentDescription = "安全设置", tint = MaterialTheme.colorScheme.primary)
+                }
             }
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 10.dp),
@@ -494,7 +528,13 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EntryDetailOverlay(entry: EntryDetailUiModel, onDismiss: () -> Unit, onEdit: () -> Unit, onCopy: (String, String) -> Unit) {
+private fun EntryDetailOverlay(
+    entry: EntryDetailUiModel,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onCopy: (String, String) -> Unit,
+    obscureSensitiveContent: Boolean
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -524,17 +564,96 @@ private fun EntryDetailOverlay(entry: EntryDetailUiModel, onDismiss: () -> Unit,
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
+                if (obscureSensitiveContent) {
+                    SecurityHintCard()
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     CopyableField("账号", entry.username, onCopy)
-                    SecretCopyableField("密码", entry.password, onCopy)
+                    SecretCopyableField("密码", entry.password, onCopy, obscureSensitiveContent)
                     entry.website?.let { CopyableField("网址", it, onCopy) }
                     entry.note?.let { StaticField("备注", it) }
                     if (entry.customFields.isNotEmpty()) {
                         Text("自定义信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                        entry.customFields.forEach { field -> CustomFieldRow(field, onCopy) }
+                        entry.customFields.forEach { field -> CustomFieldRow(field, onCopy, obscureSensitiveContent) }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SecuritySettingsDialog(
+    settings: SecuritySettings,
+    onDismiss: () -> Unit,
+    onSettingsChange: (SecuritySettings) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Icon(Icons.Rounded.Settings, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("完成")
+            }
+        },
+        title = { Text("安全设置") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                SecuritySettingRow("启用应用锁", settings.appLockEnabled) {
+                    onSettingsChange(settings.copy(appLockEnabled = it))
+                }
+                SecuritySettingRow("启用生物解锁", settings.biometricUnlockEnabled) {
+                    onSettingsChange(settings.copy(biometricUnlockEnabled = it))
+                }
+                SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled) {
+                    onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
+                }
+                SecuritySettingRow("阻止截图（预留）", settings.blockScreenshotsEnabled) {
+                    onSettingsChange(settings.copy(blockScreenshotsEnabled = it))
+                }
+                SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled) {
+                    onSettingsChange(settings.copy(obscureSensitiveContentEnabled = it))
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun SecuritySettingRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun SecurityHintCard() {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                "已启用敏感信息保护模式",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -603,9 +722,10 @@ private fun CopyableField(label: String, value: String, onCopy: (String, String)
 }
 
 @Composable
-private fun SecretCopyableField(label: String, value: String, onCopy: (String, String) -> Unit) {
+private fun SecretCopyableField(label: String, value: String, onCopy: (String, String) -> Unit, obscureSensitiveContent: Boolean) {
     var visible by remember { mutableStateOf(false) }
-    val displayValue = if (visible) value else "•".repeat(maxOf(8, value.length.coerceAtMost(16)))
+    val shouldHide = obscureSensitiveContent || !visible
+    val displayValue = if (shouldHide) "•".repeat(maxOf(8, value.length.coerceAtMost(16))) else value
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(
@@ -637,8 +757,8 @@ private fun StaticField(label: String, value: String) {
 }
 
 @Composable
-private fun CustomFieldRow(field: CustomFieldUiModel, onCopy: (String, String) -> Unit) {
-    if (field.isSecret) SecretCopyableField(field.label, field.value, onCopy)
+private fun CustomFieldRow(field: CustomFieldUiModel, onCopy: (String, String) -> Unit, obscureSensitiveContent: Boolean) {
+    if (field.isSecret) SecretCopyableField(field.label, field.value, onCopy, obscureSensitiveContent)
     else if (field.copyable) CopyableField(field.label, field.value, onCopy)
     else StaticField(field.label, field.value)
 }
