@@ -53,7 +53,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,6 +66,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mosetian.passwordmanager.data.vault.InMemoryVaultRepository
+import com.mosetian.passwordmanager.data.vault.VaultRepository
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryEditorForm
@@ -74,11 +75,14 @@ import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupEditorForm
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
-import com.mosetian.passwordmanager.feature.vault.model.VaultMockData
+import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
+import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
 import kotlinx.coroutines.launch
 
 @Composable
-fun VaultScreen() {
+fun VaultScreen(
+    repository: VaultRepository = remember { InMemoryVaultRepository() }
+) {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var selectedEntryId by remember { mutableStateOf<String?>(null) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
@@ -86,182 +90,203 @@ fun VaultScreen() {
     var searchQuery by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(false) }
 
-    val customGroups = remember { mutableStateListOf(*VaultMockData.initialCustomGroups.toTypedArray()) }
-    val entries = remember { mutableStateListOf(*VaultMockData.initialEntries.toTypedArray()) }
-    val entryDetails = remember { mutableStateListOf(*VaultMockData.initialEntryDetails.toTypedArray()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    val groups = remember(customGroups.toList(), entries.toList()) {
-        val builtIns = VaultMockData.builtInGroups.map { group ->
-            val count = when (group.id) {
-                GroupId.All -> entries.size
-                GroupId.Favorites -> entries.count { it.isFavorite }
-                GroupId.Recent -> entries.count { it.isRecent }
-                GroupId.Weak -> entries.count { it.isWeak }
-                is GroupId.Custom -> entries.count { it.groupId == group.id }
+    val entries = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
+        repository.getEntries()
+    }
+    val entryDetails = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
+        repository.getEntryDetails()
+    }
+    val customGroups = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
+        repository.getCustomGroups()
+    }
+
+    val uiState = remember(
+        selectedGroup,
+        selectedEntryId,
+        searchQuery,
+        searchMode,
+        editorForm,
+        groupEditorForm,
+        entries,
+        entryDetails,
+        customGroups
+    ) {
+        VaultStateFactory.buildState(
+            selectedGroup = selectedGroup,
+            selectedEntryId = selectedEntryId,
+            searchQuery = searchQuery,
+            searchMode = searchMode,
+            editorForm = editorForm,
+            groupEditorForm = groupEditorForm,
+            entries = entries,
+            entryDetails = entryDetails,
+            customGroups = customGroups
+        )
+    }
+
+    VaultScreenContent(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onSelectGroup = {
+            selectedGroup = it
+            selectedEntryId = null
+        },
+        onToggleSearch = {
+            searchMode = !searchMode
+            if (!searchMode) searchQuery = ""
+        },
+        onSearchQueryChange = { searchQuery = it },
+        onEntryClick = { selectedEntryId = it },
+        onAddEntry = { editorForm = EntryEditorForm() },
+        onEditEntry = { editorForm = EntryEditorForm(id = uiState.selectedEntry?.id ?: "") },
+        onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
+        onDismissDetail = { selectedEntryId = null },
+        onDismissEditor = { editorForm = null },
+        onDismissGroupEditor = { groupEditorForm = null },
+        onEditorFormChange = { editorForm = it },
+        onGroupEditorFormChange = { groupEditorForm = it },
+        onCopyField = { label, value ->
+            clipboardManager.setText(AnnotatedString(value))
+            scope.launch { snackbarHostState.showSnackbar("已复制$label") }
+        },
+        onSaveEntry = { form ->
+            val targetGroup = when (selectedGroup) {
+                GroupId.All, GroupId.Favorites, GroupId.Recent, GroupId.Weak -> GroupId.All
+                is GroupId.Custom -> selectedGroup
             }
-            group.copy(count = count)
+            val entryId = form.id?.takeIf { it.isNotBlank() } ?: (repository.getEntries().size + 1).toString()
+            val entry = EntryUiModel(
+                id = entryId,
+                name = form.name.ifBlank { "未命名凭据" },
+                iconEmoji = form.iconEmoji.ifBlank { "🔐" },
+                groupId = targetGroup,
+                isFavorite = selectedGroup == GroupId.Favorites,
+                isRecent = true,
+                isWeak = form.password.length in 1..6
+            )
+            val detail = EntryDetailUiModel(
+                id = entryId,
+                name = entry.name,
+                iconEmoji = entry.iconEmoji,
+                username = form.username,
+                password = form.password,
+                website = form.website.ifBlank { null },
+                note = form.note.ifBlank { null },
+                customFields = buildList {
+                    if (form.customFieldLabel.isNotBlank() || form.customFieldValue.isNotBlank()) {
+                        add(CustomFieldUiModel(form.customFieldLabel.ifBlank { "自定义字段" }, form.customFieldValue))
+                    }
+                }
+            )
+            repository.upsertEntry(entry)
+            repository.upsertEntryDetail(detail)
+            selectedEntryId = entryId
+            editorForm = null
+            scope.launch { snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据") }
+        },
+        onSaveGroup = { form ->
+            val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
+            val newGroup = GroupUiModel(
+                id = GroupId.Custom(key),
+                name = form.name.ifBlank { "新分组" },
+                count = 0,
+                icon = Icons.Rounded.FolderOpen,
+                isBuiltIn = false
+            )
+            repository.addGroup(newGroup)
+            selectedGroup = newGroup.id
+            groupEditorForm = null
+            scope.launch { snackbarHostState.showSnackbar("已创建分组：${newGroup.name}") }
         }
-        val customs = customGroups.map { group ->
-            group.copy(count = entries.count { it.groupId == group.id })
-        }
-        builtIns + customs
-    }
+    )
+}
 
-    val groupFilteredEntries = remember(selectedGroup, entries.toList()) {
-        when (selectedGroup) {
-            GroupId.All -> entries.toList()
-            GroupId.Favorites -> entries.filter { it.isFavorite }
-            GroupId.Recent -> entries.filter { it.isRecent }
-            GroupId.Weak -> entries.filter { it.isWeak }
-            is GroupId.Custom -> entries.filter { it.groupId == selectedGroup }
-        }
-    }
-    val visibleEntries = remember(groupFilteredEntries, searchQuery) {
-        if (searchQuery.isBlank()) groupFilteredEntries
-        else groupFilteredEntries.filter { it.name.contains(searchQuery, ignoreCase = true) }
-    }
-    val selectedEntry = remember(selectedEntryId, entryDetails.toList()) {
-        selectedEntryId?.let { id -> entryDetails.firstOrNull { it.id == id } }
-    }
-
+@Composable
+private fun VaultScreenContent(
+    uiState: VaultUiState,
+    snackbarHostState: SnackbarHostState,
+    onSelectGroup: (GroupId) -> Unit,
+    onToggleSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onEntryClick: (String) -> Unit,
+    onAddEntry: () -> Unit,
+    onEditEntry: () -> Unit,
+    onOpenGroupEditor: () -> Unit,
+    onDismissDetail: () -> Unit,
+    onDismissEditor: () -> Unit,
+    onDismissGroupEditor: () -> Unit,
+    onEditorFormChange: (EntryEditorForm) -> Unit,
+    onGroupEditorFormChange: (GroupEditorForm) -> Unit,
+    onCopyField: (String, String) -> Unit,
+    onSaveEntry: (EntryEditorForm) -> Unit,
+    onSaveGroup: (GroupEditorForm) -> Unit
+) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { editorForm = EntryEditorForm() }) {
+            FloatingActionButton(onClick = onAddEntry) {
                 Icon(Icons.Rounded.Add, contentDescription = "新增凭据")
             }
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxSize().padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 LeftGroupsPane(
-                    groups = groups,
-                    selectedGroup = selectedGroup,
-                    onGroupClick = {
-                        selectedGroup = it
-                        selectedEntryId = null
-                    },
-                    onManageGroups = {
-                        groupEditorForm = GroupEditorForm()
-                    }
+                    groups = uiState.groups,
+                    selectedGroup = uiState.selectedGroup,
+                    onGroupClick = onSelectGroup,
+                    onManageGroups = onOpenGroupEditor
                 )
                 RightEntriesList(
-                    entries = visibleEntries,
-                    searchQuery = searchQuery,
-                    searchMode = searchMode,
-                    onSearchQueryChange = { searchQuery = it },
-                    onToggleSearch = {
-                        searchMode = !searchMode
-                        if (!searchMode) searchQuery = ""
-                    },
-                    onEntryClick = { selectedEntryId = it },
-                    onAddClick = { editorForm = EntryEditorForm() },
+                    entries = uiState.visibleEntries,
+                    searchQuery = uiState.searchQuery,
+                    searchMode = uiState.searchMode,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onToggleSearch = onToggleSearch,
+                    onEntryClick = onEntryClick,
+                    onAddClick = onAddEntry,
                     modifier = Modifier.weight(1f)
                 )
             }
 
             AnimatedVisibility(
-                visible = selectedEntry != null,
+                visible = uiState.selectedEntry != null,
                 enter = fadeIn() + scaleIn(initialScale = 0.96f),
                 exit = fadeOut() + scaleOut(targetScale = 0.96f)
             ) {
-                if (selectedEntry != null) {
+                uiState.selectedEntry?.let { entry ->
                     EntryDetailOverlay(
-                        entry = selectedEntry,
-                        onDismiss = { selectedEntryId = null },
-                        onEdit = { editorForm = VaultMockData.createForm(selectedEntry) },
-                        onCopy = { label, value ->
-                            clipboardManager.setText(AnnotatedString(value))
-                            scope.launch { snackbarHostState.showSnackbar("已复制$label") }
-                        }
+                        entry = entry,
+                        onDismiss = onDismissDetail,
+                        onEdit = onEditEntry,
+                        onCopy = onCopyField
                     )
                 }
             }
 
-            if (editorForm != null) {
+            uiState.editorForm?.let { form ->
                 EntryEditorDialog(
-                    form = editorForm!!,
-                    onDismiss = { editorForm = null },
-                    onFormChange = { editorForm = it },
-                    onSave = { form ->
-                        val targetGroup = when (selectedGroup) {
-                            GroupId.All, GroupId.Favorites, GroupId.Recent, GroupId.Weak -> GroupId.All
-                            is GroupId.Custom -> selectedGroup
-                        }
-                        val entryId = form.id ?: (entries.size + 1).toString()
-                        val entry = EntryUiModel(
-                            id = entryId,
-                            name = form.name.ifBlank { "未命名凭据" },
-                            iconEmoji = form.iconEmoji.ifBlank { "🔐" },
-                            groupId = targetGroup,
-                            isFavorite = selectedGroup == GroupId.Favorites,
-                            isRecent = true,
-                            isWeak = form.password.length in 1..6
-                        )
-                        val detail = EntryDetailUiModel(
-                            id = entryId,
-                            name = entry.name,
-                            iconEmoji = entry.iconEmoji,
-                            username = form.username,
-                            password = form.password,
-                            website = form.website.ifBlank { null },
-                            note = form.note.ifBlank { null },
-                            customFields = buildList {
-                                if (form.customFieldLabel.isNotBlank() || form.customFieldValue.isNotBlank()) {
-                                    add(CustomFieldUiModel(form.customFieldLabel.ifBlank { "自定义字段" }, form.customFieldValue))
-                                }
-                            }
-                        )
-                        val existingEntryIndex = entries.indexOfFirst { it.id == entryId }
-                        if (existingEntryIndex >= 0) {
-                            entries[existingEntryIndex] = entry
-                            val existingDetailIndex = entryDetails.indexOfFirst { it.id == entryId }
-                            if (existingDetailIndex >= 0) entryDetails[existingDetailIndex] = detail
-                            if (selectedEntryId == entryId) selectedEntryId = entryId
-                            scope.launch { snackbarHostState.showSnackbar("已更新凭据") }
-                        } else {
-                            entries.add(0, entry)
-                            entryDetails.add(0, detail)
-                            selectedEntryId = entryId
-                            scope.launch { snackbarHostState.showSnackbar("已新增凭据") }
-                        }
-                        editorForm = null
-                    }
+                    form = form,
+                    onDismiss = onDismissEditor,
+                    onFormChange = onEditorFormChange,
+                    onSave = onSaveEntry
                 )
             }
 
-            if (groupEditorForm != null) {
+            uiState.groupEditorForm?.let { form ->
                 GroupEditorDialog(
-                    form = groupEditorForm!!,
-                    onDismiss = { groupEditorForm = null },
-                    onFormChange = { groupEditorForm = it },
-                    onSave = { form ->
-                        val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
-                        val newGroup = GroupUiModel(
-                            id = GroupId.Custom(key),
-                            name = form.name.ifBlank { "新分组" },
-                            count = 0,
-                            icon = Icons.Rounded.FolderOpen,
-                            isBuiltIn = false
-                        )
-                        customGroups.add(newGroup)
-                        selectedGroup = newGroup.id
-                        groupEditorForm = null
-                        scope.launch { snackbarHostState.showSnackbar("已创建分组：${newGroup.name}") }
-                    }
+                    form = form,
+                    onDismiss = onDismissGroupEditor,
+                    onFormChange = onGroupEditorFormChange,
+                    onSave = onSaveGroup
                 )
             }
         }
@@ -276,9 +301,7 @@ private fun LeftGroupsPane(
     onManageGroups: () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(108.dp),
+        modifier = Modifier.fillMaxHeight().width(108.dp),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 6.dp
@@ -286,9 +309,7 @@ private fun LeftGroupsPane(
         Column {
             IconButton(
                 onClick = onManageGroups,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 10.dp)
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp)
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = "管理分组")
             }
@@ -300,32 +321,17 @@ private fun LeftGroupsPane(
                     val selected = group.id == selectedGroup
                     val scale by animateFloatAsState(if (selected) 1.03f else 1f, label = "group_scale")
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(RoundedCornerShape(24.dp))
-                            .clickable { onGroupClick(group.id) },
+                        modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
+                            .clip(RoundedCornerShape(24.dp)).clickable { onGroupClick(group.id) },
                         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = group.icon,
-                                contentDescription = group.name,
-                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column(modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(group.icon, contentDescription = group.name, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = group.name,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Text(group.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(6.dp))
-                            Badge { Text(text = group.count.toString()) }
+                            Badge { Text(group.count.toString()) }
                         }
                     }
                 }
@@ -345,24 +351,15 @@ private fun RightEntriesList(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp
-    ) {
+    Surface(modifier = modifier.fillMaxHeight(), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("我的凭据", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (searchQuery.isBlank()) "极简、安全、专注的名称列表" else "当前搜索到 ${entries.size} 条结果",
+                            if (searchQuery.isBlank()) "极简、安全、专注的名称列表" else "当前搜索到 ${entries.size} 条结果",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -381,32 +378,20 @@ private fun RightEntriesList(
                 }
             }
             if (entries.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text(if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (searchQuery.isBlank()) "你可以点击右上角的新增按钮创建第一条凭据" else "试试更短的关键词，或者换一个分组看看",
+                            if (searchQuery.isBlank()) "你可以点击右上角的新增按钮创建第一条凭据" else "试试更短的关键词，或者换一个分组看看",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(entries) { entry ->
-                        EntryNameCard(entry = entry, onClick = { onEntryClick(entry.id) })
-                    }
+                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(entries) { entry -> EntryNameCard(entry = entry, onClick = { onEntryClick(entry.id) }) }
                 }
             }
         }
@@ -415,32 +400,13 @@ private fun RightEntriesList(
 
 @Composable
 private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(42.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) { Text(text = entry.iconEmoji) }
+    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 2.dp) {
+        Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(modifier = Modifier.size(42.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                Box(contentAlignment = Alignment.Center) { Text(entry.iconEmoji) }
             }
             Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = entry.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(modifier = Modifier.width(8.dp))
             Icon(Icons.AutoMirrored.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -448,49 +414,27 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EntryDetailOverlay(
-    entry: EntryDetailUiModel,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onCopy: (String, String) -> Unit
-) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.60f)).clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onDismiss
-        )
-    ) {
-        Surface(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f).fillMaxHeight(0.82f),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 10.dp,
-            shadowElevation = 20.dp
-        ) {
+private fun EntryDetailOverlay(entry: EntryDetailUiModel, onDismiss: () -> Unit, onEdit: () -> Unit, onCopy: (String, String) -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.60f)).clickable(
+        interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss
+    )) {
+        Surface(modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f).fillMaxHeight(0.82f), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 10.dp, shadowElevation = 20.dp) {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        modifier = Modifier.size(48.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) { Text(text = entry.iconEmoji) }
+                    Surface(modifier = Modifier.size(48.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Box(contentAlignment = Alignment.Center) { Text(entry.iconEmoji) }
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = "点击字段值即可复制", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("点击字段值即可复制", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑") }
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
-                Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     CopyableField("账号", entry.username, onCopy)
                     SecretCopyableField("密码", entry.password, onCopy)
                     entry.website?.let { CopyableField("网址", it, onCopy) }
@@ -506,12 +450,7 @@ private fun EntryDetailOverlay(
 }
 
 @Composable
-private fun EntryEditorDialog(
-    form: EntryEditorForm,
-    onDismiss: () -> Unit,
-    onFormChange: (EntryEditorForm) -> Unit,
-    onSave: (EntryEditorForm) -> Unit
-) {
+private fun EntryEditorDialog(form: EntryEditorForm, onDismiss: () -> Unit, onFormChange: (EntryEditorForm) -> Unit, onSave: (EntryEditorForm) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -539,12 +478,7 @@ private fun EntryEditorDialog(
 }
 
 @Composable
-private fun GroupEditorDialog(
-    form: GroupEditorForm,
-    onDismiss: () -> Unit,
-    onFormChange: (GroupEditorForm) -> Unit,
-    onSave: (GroupEditorForm) -> Unit
-) {
+private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFormChange: (GroupEditorForm) -> Unit, onSave: (GroupEditorForm) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = { onSave(form) }) { Text("创建分组") } },
@@ -563,13 +497,10 @@ private fun GroupEditorDialog(
 @Composable
 private fun CopyableField(label: String, value: String, onCopy: (String, String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { onCopy(label, value) }.padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Row(modifier = Modifier.fillMaxWidth().clickable { onCopy(label, value) }.padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Spacer(modifier = Modifier.width(12.dp))
                 Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label", tint = MaterialTheme.colorScheme.primary)
             }
@@ -582,16 +513,12 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
     var visible by remember { mutableStateOf(false) }
     val displayValue = if (visible) value else "•".repeat(maxOf(8, value.length.coerceAtMost(16)))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(text = displayValue, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).clickable { onCopy(label, value) })
-                IconButton(onClick = { visible = !visible }) {
-                    Icon(if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = if (visible) "隐藏密码" else "显示密码")
-                }
-                IconButton(onClick = { onCopy(label, value) }) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label")
-                }
+                Text(displayValue, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).clickable { onCopy(label, value) })
+                IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = if (visible) "隐藏密码" else "显示密码") }
+                IconButton(onClick = { onCopy(label, value) }) { Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label") }
             }
         }
     }
@@ -600,9 +527,9 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
 @Composable
 private fun StaticField(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-            Text(text = value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp))
+            Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp))
         }
     }
 }
