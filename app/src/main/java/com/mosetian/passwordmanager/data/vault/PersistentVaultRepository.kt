@@ -1,5 +1,7 @@
 package com.mosetian.passwordmanager.data.vault
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Folder
 import com.mosetian.passwordmanager.data.local.dao.CustomGroupDao
 import com.mosetian.passwordmanager.data.local.dao.EntryDao
 import com.mosetian.passwordmanager.data.local.dao.EntryDetailDao
@@ -51,7 +53,7 @@ class PersistentVaultRepository(
                 id = GroupId.Custom(it.key),
                 name = it.name,
                 count = 0,
-                icon = androidx.compose.material.icons.Icons.Rounded.Key,
+                icon = Icons.Rounded.Folder,
                 isBuiltIn = false
             )
         }
