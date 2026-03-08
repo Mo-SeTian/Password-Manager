@@ -51,7 +51,7 @@ class PersistentVaultRepository(
                 id = GroupId.Custom(it.key),
                 name = it.name,
                 count = 0,
-                icon = androidx.compose.material.icons.Icons.Rounded.Folder,
+                icon = androidx.compose.material.icons.Icons.Rounded.Key,
                 isBuiltIn = false
             )
         }
