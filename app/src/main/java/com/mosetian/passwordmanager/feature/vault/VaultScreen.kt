@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -442,6 +443,31 @@ private fun RightEntriesList(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    if (entries.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${entries.size} 项",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
                     IconButton(onClick = onToggleSearch) { Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary) }
                     IconButton(onClick = onAddClick) { Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary) }
                 }
@@ -601,6 +627,11 @@ private fun SecuritySettingsDialog(
         title = { Text("安全设置") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "这是第一版安全能力结构，后续会继续接入应用锁、生物识别、截图保护和剪贴板自动清理。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 SecuritySettingRow("启用应用锁", settings.appLockEnabled) {
                     onSettingsChange(settings.copy(appLockEnabled = it))
                 }
@@ -673,6 +704,11 @@ private fun EntryEditorDialog(form: EntryEditorForm, onDismiss: () -> Unit, onFo
         title = { Text(if (form.id == null) "新增凭据" else "编辑凭据") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "当前为阶段性 V1 编辑能力，后续会继续补充更多字段与校验逻辑。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.username, { onFormChange(form.copy(username = it)) }, label = { Text("账号") }, singleLine = true, shape = RoundedCornerShape(20.dp))
