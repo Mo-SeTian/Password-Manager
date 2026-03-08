@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,24 +29,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
+import com.mosetian.passwordmanager.feature.vault.model.EntryEditorForm
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
@@ -73,23 +79,44 @@ import kotlinx.coroutines.launch
 fun VaultScreen() {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var selectedEntryId by remember { mutableStateOf<String?>(null) }
+    var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
+
+    val entries = remember { mutableStateListOf(*VaultMockData.initialEntries.toTypedArray()) }
+    val entryDetails = remember { mutableStateListOf(*VaultMockData.initialEntryDetails.toTypedArray()) }
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    val visibleEntries = remember(selectedGroup) {
-        when (selectedGroup) {
-            GroupId.All -> VaultMockData.entries
-            else -> VaultMockData.entries.filter { it.groupId == selectedGroup }
+    val groups = remember(entries.size) {
+        VaultMockData.groups.map { group ->
+            val count = when (group.id) {
+                GroupId.All -> entries.size
+                else -> entries.count { it.groupId == group.id }
+            }
+            group.copy(count = count)
         }
     }
-    val selectedEntry = remember(selectedEntryId) {
-        selectedEntryId?.let(VaultMockData::detailById)
+
+    val visibleEntries = remember(selectedGroup, entries.toList()) {
+        when (selectedGroup) {
+            GroupId.All -> entries.toList()
+            else -> entries.filter { it.groupId == selectedGroup }
+        }
+    }
+    val selectedEntry = remember(selectedEntryId, entryDetails.toList()) {
+        selectedEntryId?.let { id -> entryDetails.firstOrNull { it.id == id } }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                editorForm = EntryEditorForm()
+            }) {
+                Icon(Icons.Rounded.Add, contentDescription = "新增凭据")
+            }
+        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -103,13 +130,14 @@ fun VaultScreen() {
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 LeftGroupsPane(
-                    groups = VaultMockData.groups,
+                    groups = groups,
                     selectedGroup = selectedGroup,
                     onGroupClick = { selectedGroup = it }
                 )
                 RightEntriesList(
                     entries = visibleEntries,
                     onEntryClick = { selectedEntryId = it },
+                    onAddClick = { editorForm = EntryEditorForm() },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -124,9 +152,7 @@ fun VaultScreen() {
                         entry = selectedEntry,
                         onDismiss = { selectedEntryId = null },
                         onEdit = {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("编辑功能将在下一步接入")
-                            }
+                            editorForm = VaultMockData.createForm(selectedEntry)
                         },
                         onCopy = { label, value ->
                             clipboardManager.setText(AnnotatedString(value))
@@ -136,6 +162,67 @@ fun VaultScreen() {
                         }
                     )
                 }
+            }
+
+            if (editorForm != null) {
+                EntryEditorDialog(
+                    form = editorForm!!,
+                    onDismiss = { editorForm = null },
+                    onFormChange = { editorForm = it },
+                    onSave = { form ->
+                        val targetGroup = when (selectedGroup) {
+                            GroupId.All -> GroupId.All
+                            else -> selectedGroup
+                        }
+                        val entryId = form.id ?: (entries.size + 1).toString()
+                        val entry = EntryUiModel(
+                            id = entryId,
+                            name = form.name.ifBlank { "未命名凭据" },
+                            iconEmoji = form.iconEmoji.ifBlank { "🔐" },
+                            groupId = targetGroup
+                        )
+                        val detail = EntryDetailUiModel(
+                            id = entryId,
+                            name = entry.name,
+                            iconEmoji = entry.iconEmoji,
+                            username = form.username,
+                            password = form.password,
+                            website = form.website.ifBlank { null },
+                            note = form.note.ifBlank { null },
+                            customFields = buildList {
+                                if (form.customFieldLabel.isNotBlank() || form.customFieldValue.isNotBlank()) {
+                                    add(
+                                        CustomFieldUiModel(
+                                            label = form.customFieldLabel.ifBlank { "自定义字段" },
+                                            value = form.customFieldValue
+                                        )
+                                    )
+                                }
+                            }
+                        )
+
+                        val existingEntryIndex = entries.indexOfFirst { it.id == entryId }
+                        if (existingEntryIndex >= 0) {
+                            entries[existingEntryIndex] = entry
+                            val existingDetailIndex = entryDetails.indexOfFirst { it.id == entryId }
+                            if (existingDetailIndex >= 0) {
+                                entryDetails[existingDetailIndex] = detail
+                            }
+                            if (selectedEntryId == entryId) selectedEntryId = entryId
+                            scope.launch {
+                                snackbarHostState.showSnackbar("已更新凭据")
+                            }
+                        } else {
+                            entries.add(0, entry)
+                            entryDetails.add(0, detail)
+                            selectedEntryId = entryId
+                            scope.launch {
+                                snackbarHostState.showSnackbar("已新增凭据")
+                            }
+                        }
+                        editorForm = null
+                    }
+                )
             }
         }
     }
@@ -209,6 +296,7 @@ private fun LeftGroupsPane(
 private fun RightEntriesList(
     entries: List<EntryUiModel>,
     onEntryClick: (String) -> Unit,
+    onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -242,6 +330,9 @@ private fun RightEntriesList(
                 IconButton(onClick = { }) {
                     Icon(Icons.Rounded.Search, contentDescription = "搜索")
                 }
+                IconButton(onClick = onAddClick) {
+                    Icon(Icons.Rounded.Add, contentDescription = "新增")
+                }
             }
 
             if (entries.isEmpty()) {
@@ -259,7 +350,7 @@ private fun RightEntriesList(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "后续这里会接入优雅插图和添加入口",
+                            text = "你可以点击右上角的新增按钮创建第一条凭据",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -426,6 +517,88 @@ private fun EntryDetailOverlay(
             }
         }
     }
+}
+
+@Composable
+private fun EntryEditorDialog(
+    form: EntryEditorForm,
+    onDismiss: () -> Unit,
+    onFormChange: (EntryEditorForm) -> Unit,
+    onSave: (EntryEditorForm) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onSave(form) }) {
+                Icon(Icons.Rounded.Save, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        title = {
+            Text(if (form.id == null) "新增凭据" else "编辑凭据")
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = form.name,
+                    onValueChange = { onFormChange(form.copy(name = it)) },
+                    label = { Text("名称") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.iconEmoji,
+                    onValueChange = { onFormChange(form.copy(iconEmoji = it)) },
+                    label = { Text("图标 / Emoji") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.username,
+                    onValueChange = { onFormChange(form.copy(username = it)) },
+                    label = { Text("账号") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.password,
+                    onValueChange = { onFormChange(form.copy(password = it)) },
+                    label = { Text("密码") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.website,
+                    onValueChange = { onFormChange(form.copy(website = it)) },
+                    label = { Text("网址") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.note,
+                    onValueChange = { onFormChange(form.copy(note = it)) },
+                    label = { Text("备注") },
+                    minLines = 3
+                )
+                OutlinedTextField(
+                    value = form.customFieldLabel,
+                    onValueChange = { onFormChange(form.copy(customFieldLabel = it)) },
+                    label = { Text("自定义字段名称") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = form.customFieldValue,
+                    onValueChange = { onFormChange(form.copy(customFieldValue = it)) },
+                    label = { Text("自定义字段值") },
+                    singleLine = true
+                )
+            }
+        }
+    )
 }
 
 @Composable

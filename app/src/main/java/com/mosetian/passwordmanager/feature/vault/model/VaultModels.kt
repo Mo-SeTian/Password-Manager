@@ -48,6 +48,18 @@ data class EntryDetailUiModel(
     val customFields: List<CustomFieldUiModel> = emptyList()
 )
 
+data class EntryEditorForm(
+    val id: String? = null,
+    val name: String = "",
+    val iconEmoji: String = "🔐",
+    val username: String = "",
+    val password: String = "",
+    val website: String = "",
+    val note: String = "",
+    val customFieldLabel: String = "",
+    val customFieldValue: String = ""
+)
+
 object VaultMockData {
     val groups = listOf(
         GroupUiModel(GroupId.All, "全部", 12, Icons.Rounded.Folder),
@@ -57,7 +69,7 @@ object VaultMockData {
         GroupUiModel(GroupId.Custom("work"), "工作", 3, Icons.Rounded.Key)
     )
 
-    val entries = listOf(
+    val initialEntries = listOf(
         EntryUiModel("1", "GitHub 工作", "💻", GroupId.Custom("work")),
         EntryUiModel("2", "QQ", "🐧", GroupId.All),
         EntryUiModel("3", "公司邮箱", "📨", GroupId.Custom("work")),
@@ -66,7 +78,7 @@ object VaultMockData {
         EntryUiModel("6", "银行短信服务", "🏦", GroupId.Weak)
     )
 
-    val entryDetails = listOf(
+    val initialEntryDetails = listOf(
         EntryDetailUiModel(
             id = "1",
             name = "GitHub 工作",
@@ -134,5 +146,19 @@ object VaultMockData {
         )
     )
 
-    fun detailById(id: String): EntryDetailUiModel? = entryDetails.firstOrNull { it.id == id }
+    fun createForm(detail: EntryDetailUiModel?): EntryEditorForm {
+        if (detail == null) return EntryEditorForm()
+        val firstCustom = detail.customFields.firstOrNull()
+        return EntryEditorForm(
+            id = detail.id,
+            name = detail.name,
+            iconEmoji = detail.iconEmoji,
+            username = detail.username,
+            password = detail.password,
+            website = detail.website.orEmpty(),
+            note = detail.note.orEmpty(),
+            customFieldLabel = firstCustom?.label.orEmpty(),
+            customFieldValue = firstCustom?.value.orEmpty()
+        )
+    }
 }

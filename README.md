@@ -1,21 +1,45 @@
 # AI编写：Password Manager
 
-An Android password manager built with **Jetpack Compose** and **Material 3 adaptive UI**.
+这是一个使用 **Jetpack Compose** 与 **Material 3 自适应设计** 构建的安卓密码管理器。
 
-## Milestone 1
+## 当前开发进度
 
-This repository currently contains the initial project scaffold and the first-pass vault UI skeleton:
+### 第 1 步：项目初始化与界面骨架
+已完成：
 
-- Jetpack Compose + Material 3 setup
-- Dark-first 2026-oriented theme foundation
-- Left groups pane + right entries list layout
-- Basic UI models and mock data
+- Android 工程初始化
+- Jetpack Compose + Material 3 基础接入
+- 深色优先的 2026 风格主题底座
+- 左侧分组栏 + 右侧极简凭据列表骨架
+- 基础 UI 模型与模拟数据
 
-## Milestone 2
+### 第 2 步：悬浮详情窗与点击复制
+已完成：
 
-This milestone adds the core interaction loop:
+- 点击凭据条目弹出悬浮详情窗
+- 展示账号、密码、网址、备注、自定义字段
+- 点击字段值自动复制
+- 密码显示 / 隐藏切换
+- 编辑按钮占位交互
 
-- Floating credential detail overlay
-- Tap-to-copy for account/password/custom fields
-- Detail open/close interactions
-- Edit entry action placeholder
+### 第 3 步：新增与编辑流程
+进行中 / 本次提交完成：
+
+- 新增凭据入口
+- 编辑凭据弹窗
+- 保存后同步刷新列表与详情
+- README 与提交信息统一改为简体中文
+
+## 当前说明
+
+由于当前开发环境未安装完整 Android SDK，仓库中的代码提交以结构设计与实现推进为主，后续在具备 SDK 的环境中补充完整构建验证。
+
+## 下一步计划
+
+下一步将继续推进：
+
+- 搜索能力
+- 更完整的状态管理
+- 分组管理与智能分组
+- 本地数据持久化
+- 更细致的视觉打磨
