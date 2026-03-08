@@ -45,7 +45,8 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,8 +96,8 @@ private data class VaultLayoutDensity(
     val screenPadding: Dp,
     val paneGap: Dp,
     val paneCorner: Dp,
-    val listHeaderHorizontal: Dp,
-    val listHeaderVertical: Dp,
+    val topBarHorizontal: Dp,
+    val topBarVertical: Dp,
     val listItemHorizontal: Dp,
     val listItemVertical: Dp,
     val listItemSpacing: Dp,
@@ -112,8 +113,8 @@ private fun layoutDensityOf(value: Float): VaultLayoutDensity {
         screenPadding = 16.dp * factor,
         paneGap = 16.dp * factor,
         paneCorner = 30.dp * factor,
-        listHeaderHorizontal = 22.dp * factor,
-        listHeaderVertical = 18.dp * factor,
+        topBarHorizontal = 22.dp * factor,
+        topBarVertical = 18.dp * factor,
         listItemHorizontal = 18.dp * factor,
         listItemVertical = 18.dp * factor,
         listItemSpacing = 14.dp * factor,
@@ -345,6 +346,7 @@ private fun VaultScreenContent(
                     entries = uiState.visibleEntries,
                     searchQuery = uiState.searchQuery,
                     searchMode = uiState.searchMode,
+                    selectedGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroup },
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
@@ -449,10 +451,6 @@ private fun LeftGroupsPane(
                                 overflow = TextOverflow.Ellipsis,
                                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Badge(containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh) {
-                                Text(group.count.toString())
-                            }
                         }
                     }
                 }
@@ -463,21 +461,17 @@ private fun LeftGroupsPane(
                     .padding(horizontal = 10.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TextButton(
+                IconButton(
                     onClick = onManageGroups,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("添加分组")
+                    Icon(Icons.Rounded.Add, contentDescription = "添加分组", tint = MaterialTheme.colorScheme.primary)
                 }
-                TextButton(
+                IconButton(
                     onClick = onOpenSecurityPanel,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("安全设置")
+                    Icon(Icons.Rounded.Lock, contentDescription = "安全设置", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -489,6 +483,7 @@ private fun RightEntriesList(
     entries: List<EntryUiModel>,
     searchQuery: String,
     searchMode: Boolean,
+    selectedGroup: GroupUiModel?,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
@@ -504,56 +499,16 @@ private fun RightEntriesList(
         shadowElevation = 10.dp
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = layoutDensity.listHeaderHorizontal, vertical = layoutDensity.listHeaderVertical)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("我的凭据", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            if (searchQuery.isBlank()) "极简、安全、专注的名称列表" else "当前搜索到 ${entries.size} 条结果",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (entries.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Star,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "${entries.size} 项",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    IconButton(onClick = onToggleSearch) { Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary) }
-                    IconButton(onClick = onAddClick) { Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary) }
-                }
-                AnimatedVisibility(visible = searchMode) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        label = { Text("搜索凭据名称") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(22.dp)
-                    )
-                }
-            }
+            VaultTopBar(
+                selectedGroup = selectedGroup,
+                entriesCount = entries.size,
+                searchQuery = searchQuery,
+                searchMode = searchMode,
+                onSearchQueryChange = onSearchQueryChange,
+                onToggleSearch = onToggleSearch,
+                onAddClick = onAddClick,
+                layoutDensity = layoutDensity
+            )
             if (entries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
                     Surface(
@@ -583,7 +538,7 @@ private fun RightEntriesList(
                     }
                 }
             } else {
-                LazyColumn(contentPadding = PaddingValues(horizontal = layoutDensity.listHeaderHorizontal - 2.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(layoutDensity.listItemSpacing)) {
+                LazyColumn(contentPadding = PaddingValues(horizontal = layoutDensity.topBarHorizontal - 2.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(layoutDensity.listItemSpacing)) {
                     items(entries) { entry ->
                         EntryNameCard(
                             entry = entry,
@@ -593,6 +548,52 @@ private fun RightEntriesList(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun VaultTopBar(
+    selectedGroup: GroupUiModel?,
+    entriesCount: Int,
+    searchQuery: String,
+    searchMode: Boolean,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onAddClick: () -> Unit,
+    layoutDensity: VaultLayoutDensity
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = layoutDensity.topBarHorizontal, vertical = layoutDensity.topBarVertical)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(selectedGroup?.name ?: "我的凭据", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    if (searchQuery.isBlank()) "当前分组共 ${entriesCount} 条凭据" else "当前搜索到 ${entriesCount} 条结果",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onToggleSearch) {
+                Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(onClick = onAddClick) {
+                Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+        AnimatedVisibility(visible = searchMode) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                label = { Text("搜索凭据名称") },
+                singleLine = true,
+                shape = RoundedCornerShape(22.dp)
+            )
         }
     }
 }
@@ -826,31 +827,37 @@ private fun EntryEditorDialog(
                 )
                 OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                var groupMenuExpanded by remember { mutableStateOf(false) }
+                val selectedGroupName = groups.firstOrNull { it.id == form.groupId }?.name ?: "请选择分组"
                 Text("分组", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LazyColumn(
-                    modifier = Modifier.height((groups.size.coerceAtMost(4) * 56).dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(groups) { group ->
-                        val selected = group.id == form.groupId
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onFormChange(form.copy(groupId = group.id)) },
-                            shape = RoundedCornerShape(18.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { groupMenuExpanded = true },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(group.icon, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(group.name, modifier = Modifier.weight(1f))
-                                if (selected) {
-                                    Text("已选中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                            Text(selectedGroupName, modifier = Modifier.weight(1f))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "展开分组")
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = groupMenuExpanded,
+                        onDismissRequest = { groupMenuExpanded = false }
+                    ) {
+                        groups.forEach { group ->
+                            DropdownMenuItem(
+                                text = { Text(group.name) },
+                                onClick = {
+                                    onFormChange(form.copy(groupId = group.id))
+                                    groupMenuExpanded = false
                                 }
-                            }
+                            )
                         }
                     }
                 }
