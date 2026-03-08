@@ -80,6 +80,8 @@ fun VaultScreen() {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var selectedEntryId by remember { mutableStateOf<String?>(null) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchMode by remember { mutableStateOf(false) }
 
     val entries = remember { mutableStateListOf(*VaultMockData.initialEntries.toTypedArray()) }
     val entryDetails = remember { mutableStateListOf(*VaultMockData.initialEntryDetails.toTypedArray()) }
@@ -97,11 +99,15 @@ fun VaultScreen() {
         }
     }
 
-    val visibleEntries = remember(selectedGroup, entries.toList()) {
+    val groupFilteredEntries = remember(selectedGroup, entries.toList()) {
         when (selectedGroup) {
             GroupId.All -> entries.toList()
             else -> entries.filter { it.groupId == selectedGroup }
         }
+    }
+    val visibleEntries = remember(groupFilteredEntries, searchQuery) {
+        if (searchQuery.isBlank()) groupFilteredEntries
+        else groupFilteredEntries.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
     val selectedEntry = remember(selectedEntryId, entryDetails.toList()) {
         selectedEntryId?.let { id -> entryDetails.firstOrNull { it.id == id } }
@@ -132,10 +138,20 @@ fun VaultScreen() {
                 LeftGroupsPane(
                     groups = groups,
                     selectedGroup = selectedGroup,
-                    onGroupClick = { selectedGroup = it }
+                    onGroupClick = {
+                        selectedGroup = it
+                        selectedEntryId = null
+                    }
                 )
                 RightEntriesList(
                     entries = visibleEntries,
+                    searchQuery = searchQuery,
+                    searchMode = searchMode,
+                    onSearchQueryChange = { searchQuery = it },
+                    onToggleSearch = {
+                        searchMode = !searchMode
+                        if (!searchMode) searchQuery = ""
+                    },
                     onEntryClick = { selectedEntryId = it },
                     onAddClick = { editorForm = EntryEditorForm() },
                     modifier = Modifier.weight(1f)
@@ -295,6 +311,10 @@ private fun LeftGroupsPane(
 @Composable
 private fun RightEntriesList(
     entries: List<EntryUiModel>,
+    searchQuery: String,
+    searchMode: Boolean,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -308,30 +328,43 @@ private fun RightEntriesList(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "我的凭据",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "极简、安全、专注的名称列表",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "我的凭据",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (searchQuery.isBlank()) "极简、安全、专注的名称列表" else "当前搜索到 ${entries.size} 条结果",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onToggleSearch) {
+                        Icon(Icons.Rounded.Search, contentDescription = "搜索")
+                    }
+                    IconButton(onClick = onAddClick) {
+                        Icon(Icons.Rounded.Add, contentDescription = "新增")
+                    }
                 }
-                IconButton(onClick = { }) {
-                    Icon(Icons.Rounded.Search, contentDescription = "搜索")
-                }
-                IconButton(onClick = onAddClick) {
-                    Icon(Icons.Rounded.Add, contentDescription = "新增")
+
+                AnimatedVisibility(visible = searchMode) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        label = { Text("搜索凭据名称") },
+                        singleLine = true
+                    )
                 }
             }
 
@@ -344,13 +377,17 @@ private fun RightEntriesList(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "此分组暂无凭据",
+                            text = if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "你可以点击右上角的新增按钮创建第一条凭据",
+                            text = if (searchQuery.isBlank()) {
+                                "你可以点击右上角的新增按钮创建第一条凭据"
+                            } else {
+                                "试试更短的关键词，或者换一个分组看看"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
