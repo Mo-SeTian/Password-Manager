@@ -1,4 +1,4 @@
-# Password Manager
+# AI编写：Password Manager
 
 An Android password manager built with **Jetpack Compose** and **Material 3 adaptive UI**.
 
@@ -11,10 +11,11 @@ This repository currently contains the initial project scaffold and the first-pa
 - Left groups pane + right entries list layout
 - Basic UI models and mock data
 
-## Next
+## Milestone 2
 
-Milestone 2 will implement:
+This milestone adds the core interaction loop:
 
 - Floating credential detail overlay
 - Tap-to-copy for account/password/custom fields
 - Detail open/close interactions
+- Edit entry action placeholder
