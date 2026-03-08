@@ -30,7 +30,7 @@ class PreferencesStore(private val context: Context) {
             biometricUnlockEnabled = prefs[biometricUnlockEnabledKey] ?: false,
             autoClearClipboardEnabled = prefs[autoClearClipboardEnabledKey] ?: true,
             blockScreenshotsEnabled = prefs[blockScreenshotsEnabledKey] ?: false,
-            obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: true,
+            obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: false,
             darkModeEnabled = prefs[darkModeKey] ?: true
         )
     }

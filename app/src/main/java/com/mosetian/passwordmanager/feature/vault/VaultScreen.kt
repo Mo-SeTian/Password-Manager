@@ -413,6 +413,8 @@ private fun LeftGroupsPane(
     onOpenSecurityPanel: () -> Unit,
     layoutDensity: VaultLayoutDensity
 ) {
+    val pinnedGroups = groups.filter { it.id == GroupId.Favorites || it.id == GroupId.Recent || it.id == GroupId.Weak }
+    val primaryGroups = groups.filter { it.id == GroupId.All || it.id is GroupId.Custom }
     Surface(
         modifier = Modifier.fillMaxHeight().width(layoutDensity.groupsPaneWidth),
         shape = RoundedCornerShape(layoutDensity.paneCorner),
@@ -426,7 +428,36 @@ private fun LeftGroupsPane(
                 contentPadding = PaddingValues(vertical = 10.dp, horizontal = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(layoutDensity.groupItemSpacing)
             ) {
-                items(groups) { group ->
+                if (pinnedGroups.isNotEmpty()) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(layoutDensity.paneCorner - 4.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.66f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                pinnedGroups.forEach { group ->
+                                    val selected = group.id == selectedGroup
+                                    Text(
+                                        text = group.name,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .clickable { onGroupClick(group.id) }
+                                            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                items(primaryGroups) { group ->
                     val selected = group.id == selectedGroup
                     val scale by animateFloatAsState(if (selected) 1.012f else 1f, label = "group_scale")
                     Surface(

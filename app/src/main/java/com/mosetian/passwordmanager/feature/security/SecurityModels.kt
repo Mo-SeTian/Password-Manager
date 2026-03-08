@@ -5,6 +5,6 @@ data class SecuritySettings(
     val biometricUnlockEnabled: Boolean = false,
     val autoClearClipboardEnabled: Boolean = true,
     val blockScreenshotsEnabled: Boolean = false,
-    val obscureSensitiveContentEnabled: Boolean = true,
+    val obscureSensitiveContentEnabled: Boolean = false,
     val darkModeEnabled: Boolean = true
 )
