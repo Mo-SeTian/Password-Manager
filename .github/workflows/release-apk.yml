@@ -37,17 +37,20 @@ jobs:
       - name: 构建 Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: 定位 APK 文件
+      - name: 定位并重命名 APK 文件
         id: apk
         run: |
           APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-          echo "apk_name=$(basename "$APK_PATH")" >> $GITHUB_OUTPUT
+          VERSION_TAG="${GITHUB_REF_NAME}"
+          RENAMED_APK="app/build/outputs/apk/debug/app-releases-${VERSION_TAG}.apk"
+          cp "$APK_PATH" "$RENAMED_APK"
+          echo "apk_path=$RENAMED_APK" >> $GITHUB_OUTPUT
+          echo "apk_name=$(basename "$RENAMED_APK")" >> $GITHUB_OUTPUT
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
+          name: app-releases-${{ github.ref_name }}
           path: ${{ steps.apk.outputs.apk_path }}
 
       - name: 创建 GitHub Release 并附加 APK
