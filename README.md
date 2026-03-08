@@ -1,5 +1,7 @@
 # AI编写：Password Manager
 
+# 注: 该项目完全由AI自主编写、提交、打包
+
 这是一个使用 **Jetpack Compose** 与 **Material 3 自适应设计** 构建的安卓密码管理器。
 
 ## 当前状态
