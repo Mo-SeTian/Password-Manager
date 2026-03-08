@@ -91,7 +91,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun VaultScreen(
-    repository: VaultRepository = remember { InMemoryVaultRepository() }
+    repository: VaultRepository = remember { InMemoryVaultRepository() },
+    initialSecuritySettings: SecuritySettings = SecuritySettings(),
+    initialUiScale: Float = 0.92f,
+    onSecuritySettingsChange: (SecuritySettings) -> Unit = {},
+    onUiScaleChange: (Float) -> Unit = {}
 ) {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var selectedEntryId by remember { mutableStateOf<String?>(null) }
@@ -99,9 +103,9 @@ fun VaultScreen(
     var groupEditorForm by remember { mutableStateOf<GroupEditorForm?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(false) }
-    var securitySettings by remember { mutableStateOf(SecuritySettings()) }
+    var securitySettings by remember(initialSecuritySettings) { mutableStateOf(initialSecuritySettings) }
     var securityPanelVisible by remember { mutableStateOf(false) }
-    var uiScale by remember { mutableStateOf(0.92f) }
+    var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -180,8 +184,14 @@ fun VaultScreen(
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
         onOpenSecurityPanel = { securityPanelVisible = true },
         onDismissSecurityPanel = { securityPanelVisible = false },
-        onSecuritySettingsChange = { securitySettings = it },
-        onUiScaleChange = { uiScale = it },
+        onSecuritySettingsChange = {
+            securitySettings = it
+            onSecuritySettingsChange(it)
+        },
+        onUiScaleChange = {
+            uiScale = it
+            onUiScaleChange(it)
+        },
         onDismissDetail = { selectedEntryId = null },
         onDismissEditor = { editorForm = null },
         onDismissGroupEditor = { groupEditorForm = null },
@@ -778,6 +788,20 @@ private fun EntryEditorDialog(
                 OutlinedTextField(form.note, { onFormChange(form.copy(note = it)) }, label = { Text("备注") }, minLines = 3, shape = RoundedCornerShape(20.dp))
                 Text("自定义字段", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 form.customFields.forEachIndexed { index, field ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("字段 ${index + 1}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                        if (form.customFields.size > 1) {
+                            TextButton(
+                                onClick = {
+                                    onFormChange(form.copy(customFields = form.customFields.filterIndexed { currentIndex, _ -> currentIndex != index }))
+                                }
+                            ) {
+                                Icon(Icons.Rounded.Remove, contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("删除")
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         field.label,
                         { value ->

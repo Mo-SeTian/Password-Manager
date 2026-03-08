@@ -3,6 +3,7 @@ package com.mosetian.passwordmanager.data.local
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,7 @@ class PreferencesStore(private val context: Context) {
     private val autoClearClipboardEnabledKey = booleanPreferencesKey("auto_clear_clipboard_enabled")
     private val blockScreenshotsEnabledKey = booleanPreferencesKey("block_screenshots_enabled")
     private val obscureSensitiveContentEnabledKey = booleanPreferencesKey("obscure_sensitive_content_enabled")
+    private val uiScaleKey = floatPreferencesKey("ui_scale")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -32,6 +34,10 @@ class PreferencesStore(private val context: Context) {
         )
     }
 
+    val uiScale: Flow<Float> = context.appPreferences.data.map { prefs ->
+        prefs[uiScaleKey] ?: 0.92f
+    }
+
     suspend fun setDarkModeEnabled(enabled: Boolean) {
         context.appPreferences.edit { prefs ->
             prefs[darkModeKey] = enabled
@@ -45,6 +51,12 @@ class PreferencesStore(private val context: Context) {
             prefs[autoClearClipboardEnabledKey] = settings.autoClearClipboardEnabled
             prefs[blockScreenshotsEnabledKey] = settings.blockScreenshotsEnabled
             prefs[obscureSensitiveContentEnabledKey] = settings.obscureSensitiveContentEnabled
+        }
+    }
+
+    suspend fun setUiScale(scale: Float) {
+        context.appPreferences.edit { prefs ->
+            prefs[uiScaleKey] = scale
         }
     }
 }
