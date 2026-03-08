@@ -127,3 +127,14 @@ app/src/main/java/com/mosetian/passwordmanager/
 
 更完整的当前阶段说明见：
 - `docs/阶段性交付说明.md`
+- `docs/GitHub-Actions-打包说明.md`
+
+## 自动打包
+
+当前仓库已经加入 GitHub Actions 自动打包工作流：
+
+- 推送 `v*` 标签时自动构建 APK
+- 自动创建 GitHub Release
+- 自动把 APK 挂到 Release 附件
+
+当前先使用 **Debug APK** 方案，便于尽快验证打包链路。后续如果要正式分发，可以再补签名 Release APK / AAB。
