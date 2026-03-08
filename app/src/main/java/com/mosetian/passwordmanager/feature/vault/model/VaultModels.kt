@@ -20,14 +20,18 @@ data class GroupUiModel(
     val id: GroupId,
     val name: String,
     val count: Int,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val isBuiltIn: Boolean = true
 )
 
 data class EntryUiModel(
     val id: String,
     val name: String,
     val iconEmoji: String,
-    val groupId: GroupId
+    val groupId: GroupId,
+    val isFavorite: Boolean = false,
+    val isWeak: Boolean = false,
+    val isRecent: Boolean = false
 )
 
 data class CustomFieldUiModel(
@@ -60,22 +64,31 @@ data class EntryEditorForm(
     val customFieldValue: String = ""
 )
 
+data class GroupEditorForm(
+    val name: String = "",
+    val key: String = "",
+    val iconEmoji: String = "📁"
+)
+
 object VaultMockData {
-    val groups = listOf(
-        GroupUiModel(GroupId.All, "全部", 12, Icons.Rounded.Folder),
-        GroupUiModel(GroupId.Favorites, "常用", 4, Icons.Rounded.Favorite),
-        GroupUiModel(GroupId.Recent, "最近", 5, Icons.Rounded.History),
-        GroupUiModel(GroupId.Weak, "弱密码", 2, Icons.Rounded.Shield),
-        GroupUiModel(GroupId.Custom("work"), "工作", 3, Icons.Rounded.Key)
+    val builtInGroups = listOf(
+        GroupUiModel(GroupId.All, "全部", 0, Icons.Rounded.Folder, true),
+        GroupUiModel(GroupId.Favorites, "常用", 0, Icons.Rounded.Favorite, true),
+        GroupUiModel(GroupId.Recent, "最近", 0, Icons.Rounded.History, true),
+        GroupUiModel(GroupId.Weak, "弱密码", 0, Icons.Rounded.Shield, true)
+    )
+
+    val initialCustomGroups = listOf(
+        GroupUiModel(GroupId.Custom("work"), "工作", 0, Icons.Rounded.Key, false)
     )
 
     val initialEntries = listOf(
-        EntryUiModel("1", "GitHub 工作", "💻", GroupId.Custom("work")),
-        EntryUiModel("2", "QQ", "🐧", GroupId.All),
-        EntryUiModel("3", "公司邮箱", "📨", GroupId.Custom("work")),
-        EntryUiModel("4", "Netflix家庭", "🎬", GroupId.Favorites),
-        EntryUiModel("5", "云服务器 Root", "☁️", GroupId.Recent),
-        EntryUiModel("6", "银行短信服务", "🏦", GroupId.Weak)
+        EntryUiModel("1", "GitHub 工作", "💻", GroupId.Custom("work"), isFavorite = true, isRecent = true),
+        EntryUiModel("2", "QQ", "🐧", GroupId.All, isRecent = true),
+        EntryUiModel("3", "公司邮箱", "📨", GroupId.Custom("work"), isFavorite = true),
+        EntryUiModel("4", "Netflix家庭", "🎬", GroupId.All, isFavorite = true),
+        EntryUiModel("5", "云服务器 Root", "☁️", GroupId.Custom("work"), isRecent = true),
+        EntryUiModel("6", "银行短信服务", "🏦", GroupId.All, isWeak = true)
     )
 
     val initialEntryDetails = listOf(
