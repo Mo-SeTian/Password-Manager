@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -27,6 +28,25 @@ private val DarkScheme = darkColorScheme(
     onBackground = SoftText,
     onSurface = SoftText,
     onSurfaceVariant = MutedText,
+    primaryContainer = ElectricBlue.copy(alpha = 0.20f),
+    secondaryContainer = EmeraldAccent.copy(alpha = 0.18f),
+    tertiaryContainer = VioletAccent.copy(alpha = 0.18f)
+)
+
+private val LightScheme = lightColorScheme(
+    primary = ElectricBlue,
+    secondary = EmeraldAccent,
+    tertiary = VioletAccent,
+    background = LightBackground,
+    surface = LightSurface,
+    surfaceContainer = LightSurfaceRaised,
+    surfaceContainerHigh = LightSurfaceHigher,
+    surfaceVariant = LightSurfaceGlass,
+    outlineVariant = LightOutlineSoft,
+    onPrimary = Color.Black,
+    onBackground = LightSoftText,
+    onSurface = LightSoftText,
+    onSurfaceVariant = LightMutedText,
     primaryContainer = ElectricBlue.copy(alpha = 0.20f),
     secondaryContainer = EmeraldAccent.copy(alpha = 0.18f),
     tertiaryContainer = VioletAccent.copy(alpha = 0.18f)
@@ -81,7 +101,7 @@ fun PasswordManagerTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkScheme else DarkScheme,
+        colorScheme = if (darkTheme) DarkScheme else LightScheme,
         shapes = AppShapes,
         typography = AppTypography,
         content = content

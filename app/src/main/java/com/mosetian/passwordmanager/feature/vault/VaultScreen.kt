@@ -52,6 +52,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -90,7 +91,6 @@ import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
 import kotlinx.coroutines.launch
 
 private data class VaultLayoutDensity(
-    val name: String,
     val groupsPaneWidth: Dp,
     val screenPadding: Dp,
     val paneGap: Dp,
@@ -105,50 +105,21 @@ private data class VaultLayoutDensity(
 )
 
 private fun layoutDensityOf(value: Float): VaultLayoutDensity {
-    return when {
-        value <= 0.93f -> VaultLayoutDensity(
-            name = "紧凑",
-            groupsPaneWidth = 104.dp,
-            screenPadding = 12.dp,
-            paneGap = 12.dp,
-            paneCorner = 28.dp,
-            listHeaderHorizontal = 18.dp,
-            listHeaderVertical = 14.dp,
-            listItemHorizontal = 16.dp,
-            listItemVertical = 14.dp,
-            listItemSpacing = 10.dp,
-            groupItemVertical = 12.dp,
-            groupItemSpacing = 10.dp
-        )
-        value >= 1.07f -> VaultLayoutDensity(
-            name = "舒展",
-            groupsPaneWidth = 128.dp,
-            screenPadding = 20.dp,
-            paneGap = 20.dp,
-            paneCorner = 32.dp,
-            listHeaderHorizontal = 24.dp,
-            listHeaderVertical = 20.dp,
-            listItemHorizontal = 20.dp,
-            listItemVertical = 20.dp,
-            listItemSpacing = 16.dp,
-            groupItemVertical = 18.dp,
-            groupItemSpacing = 14.dp
-        )
-        else -> VaultLayoutDensity(
-            name = "标准",
-            groupsPaneWidth = 112.dp,
-            screenPadding = 16.dp,
-            paneGap = 16.dp,
-            paneCorner = 30.dp,
-            listHeaderHorizontal = 22.dp,
-            listHeaderVertical = 18.dp,
-            listItemHorizontal = 18.dp,
-            listItemVertical = 18.dp,
-            listItemSpacing = 14.dp,
-            groupItemVertical = 15.dp,
-            groupItemSpacing = 12.dp
-        )
-    }
+    val safeScale = value.coerceAtLeast(0.35f)
+    val factor = 1f + (safeScale - 1f) * 0.85f
+    return VaultLayoutDensity(
+        groupsPaneWidth = 112.dp * factor,
+        screenPadding = 16.dp * factor,
+        paneGap = 16.dp * factor,
+        paneCorner = 30.dp * factor,
+        listHeaderHorizontal = 22.dp * factor,
+        listHeaderVertical = 18.dp * factor,
+        listItemHorizontal = 18.dp * factor,
+        listItemVertical = 18.dp * factor,
+        listItemSpacing = 14.dp * factor,
+        groupItemVertical = 15.dp * factor,
+        groupItemSpacing = 12.dp * factor
+    )
 }
 
 @Composable
@@ -743,25 +714,34 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled) {
                     onSettingsChange(settings.copy(obscureSensitiveContentEnabled = it))
                 }
-                val layoutMode = layoutDensityOf(uiScale)
+                SecuritySettingRow("深色模式", settings.darkModeEnabled) {
+                    onSettingsChange(settings.copy(darkModeEnabled = it))
+                }
                 Text(
-                    "页面密度：${layoutMode.name}",
+                    "页面密度（拖动条）: ${String.format("%.2f", uiScale)}x",
                     style = MaterialTheme.typography.bodyLarge
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onUiScaleChange((uiScale - 0.1f).coerceAtLeast(0.9f)) }) {
-                        Icon(Icons.Rounded.Remove, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("更紧凑")
-                    }
+                Slider(
+                    value = uiScale,
+                    onValueChange = { onUiScaleChange(it) },
+                    valueRange = 0.35f..2.2f
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "左侧更紧凑",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
                     TextButton(onClick = { onUiScaleChange(1.0f) }) {
-                        Text("标准")
+                        Text("恢复标准")
                     }
-                    TextButton(onClick = { onUiScaleChange((uiScale + 0.1f).coerceAtMost(1.1f)) }) {
-                        Icon(Icons.Rounded.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("更舒展")
-                    }
+                    Text(
+                        "右侧更舒展",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }

@@ -25,7 +25,7 @@ fun PasswordManagerApp() {
     val uiScale by preferencesStore.uiScale.collectAsState(initial = 1.0f)
     val scope = rememberCoroutineScope()
 
-    PasswordManagerTheme {
+    PasswordManagerTheme(darkTheme = securitySettings.darkModeEnabled) {
         Surface {
             VaultScreen(
                 repository = repository,

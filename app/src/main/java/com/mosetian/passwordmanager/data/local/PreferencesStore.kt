@@ -30,7 +30,8 @@ class PreferencesStore(private val context: Context) {
             biometricUnlockEnabled = prefs[biometricUnlockEnabledKey] ?: false,
             autoClearClipboardEnabled = prefs[autoClearClipboardEnabledKey] ?: true,
             blockScreenshotsEnabled = prefs[blockScreenshotsEnabledKey] ?: false,
-            obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: true
+            obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: true,
+            darkModeEnabled = prefs[darkModeKey] ?: true
         )
     }
 
@@ -51,6 +52,7 @@ class PreferencesStore(private val context: Context) {
             prefs[autoClearClipboardEnabledKey] = settings.autoClearClipboardEnabled
             prefs[blockScreenshotsEnabledKey] = settings.blockScreenshotsEnabled
             prefs[obscureSensitiveContentEnabledKey] = settings.obscureSensitiveContentEnabled
+            prefs[darkModeKey] = settings.darkModeEnabled
         }
     }
 
