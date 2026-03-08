@@ -49,13 +49,22 @@
 - 分组管理弹窗入口
 
 ### 第 6 步：状态整理与持久化准备
-本次提交完成：
+已完成：
 
 - 抽离 VaultUiState
 - 抽离分组 / 列表筛选计算逻辑
 - 新增仓库接口 VaultRepository
 - 新增内存仓库实现 InMemoryVaultRepository
 - 为后续接入 Room / DataStore 做结构准备
+
+### 第 7 步：本地持久化骨架接入
+本次提交完成：
+
+- 接入 Room 依赖与 KSP
+- 接入 DataStore 依赖
+- 新增 Entity / DAO / Database 结构
+- 新增 PreferencesStore
+- 新增 PersistentVaultRepository 骨架
 
 ## 当前说明
 
@@ -65,7 +74,7 @@
 
 下一步将继续推进：
 
-- 接入本地持久化（Room / DataStore）
+- 将界面逐步切换到持久化仓库实现
 - 更细致的视觉打磨
 - 密码管理器安全能力
 - 更完整的编辑与分组能力
