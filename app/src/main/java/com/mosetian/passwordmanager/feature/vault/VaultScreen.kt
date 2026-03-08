@@ -66,7 +66,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,6 +73,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mosetian.passwordmanager.data.vault.InMemoryVaultRepository
 import com.mosetian.passwordmanager.data.vault.VaultRepository
@@ -89,11 +89,73 @@ import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
 import kotlinx.coroutines.launch
 
+private data class VaultLayoutDensity(
+    val name: String,
+    val groupsPaneWidth: Dp,
+    val screenPadding: Dp,
+    val paneGap: Dp,
+    val paneCorner: Dp,
+    val listHeaderHorizontal: Dp,
+    val listHeaderVertical: Dp,
+    val listItemHorizontal: Dp,
+    val listItemVertical: Dp,
+    val listItemSpacing: Dp,
+    val groupItemVertical: Dp,
+    val groupItemSpacing: Dp
+)
+
+private fun layoutDensityOf(value: Float): VaultLayoutDensity {
+    return when {
+        value <= 0.93f -> VaultLayoutDensity(
+            name = "紧凑",
+            groupsPaneWidth = 104.dp,
+            screenPadding = 12.dp,
+            paneGap = 12.dp,
+            paneCorner = 28.dp,
+            listHeaderHorizontal = 18.dp,
+            listHeaderVertical = 14.dp,
+            listItemHorizontal = 16.dp,
+            listItemVertical = 14.dp,
+            listItemSpacing = 10.dp,
+            groupItemVertical = 12.dp,
+            groupItemSpacing = 10.dp
+        )
+        value >= 1.07f -> VaultLayoutDensity(
+            name = "舒展",
+            groupsPaneWidth = 128.dp,
+            screenPadding = 20.dp,
+            paneGap = 20.dp,
+            paneCorner = 32.dp,
+            listHeaderHorizontal = 24.dp,
+            listHeaderVertical = 20.dp,
+            listItemHorizontal = 20.dp,
+            listItemVertical = 20.dp,
+            listItemSpacing = 16.dp,
+            groupItemVertical = 18.dp,
+            groupItemSpacing = 14.dp
+        )
+        else -> VaultLayoutDensity(
+            name = "标准",
+            groupsPaneWidth = 112.dp,
+            screenPadding = 16.dp,
+            paneGap = 16.dp,
+            paneCorner = 30.dp,
+            listHeaderHorizontal = 22.dp,
+            listHeaderVertical = 18.dp,
+            listItemHorizontal = 18.dp,
+            listItemVertical = 18.dp,
+            listItemSpacing = 14.dp,
+            groupItemVertical = 15.dp,
+            groupItemSpacing = 12.dp
+        )
+    }
+}
+
 @Composable
 fun VaultScreen(
     repository: VaultRepository = remember { InMemoryVaultRepository() },
     initialSecuritySettings: SecuritySettings = SecuritySettings(),
-    initialUiScale: Float = 0.92f,
+    initialUiScale: Float = 1.0f,
     onSecuritySettingsChange: (SecuritySettings) -> Unit = {},
     onUiScaleChange: (Float) -> Unit = {}
 ) {
@@ -106,6 +168,7 @@ fun VaultScreen(
     var securitySettings by remember(initialSecuritySettings) { mutableStateOf(initialSecuritySettings) }
     var securityPanelVisible by remember { mutableStateOf(false) }
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
+    val layoutDensity = remember(uiScale) { layoutDensityOf(uiScale) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -150,6 +213,7 @@ fun VaultScreen(
         securitySettings = securitySettings,
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
+        layoutDensity = layoutDensity,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
@@ -258,6 +322,7 @@ private fun VaultScreenContent(
     securitySettings: SecuritySettings,
     securityPanelVisible: Boolean,
     uiScale: Float,
+    layoutDensity: VaultLayoutDensity,
     snackbarHostState: SnackbarHostState,
     onSelectGroup: (GroupId) -> Unit,
     onToggleSearch: () -> Unit,
@@ -294,15 +359,16 @@ private fun VaultScreenContent(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(16.dp).scale(uiScale),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxSize().padding(layoutDensity.screenPadding),
+                horizontalArrangement = Arrangement.spacedBy(layoutDensity.paneGap)
             ) {
                 LeftGroupsPane(
                     groups = uiState.groups,
                     selectedGroup = uiState.selectedGroup,
                     onGroupClick = onSelectGroup,
                     onManageGroups = onOpenGroupEditor,
-                    onOpenSecurityPanel = onOpenSecurityPanel
+                    onOpenSecurityPanel = onOpenSecurityPanel,
+                    layoutDensity = layoutDensity
                 )
                 RightEntriesList(
                     entries = uiState.visibleEntries,
@@ -312,6 +378,7 @@ private fun VaultScreenContent(
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
                     onAddClick = onAddEntry,
+                    layoutDensity = layoutDensity,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -370,11 +437,12 @@ private fun LeftGroupsPane(
     selectedGroup: GroupId,
     onGroupClick: (GroupId) -> Unit,
     onManageGroups: () -> Unit,
-    onOpenSecurityPanel: () -> Unit
+    onOpenSecurityPanel: () -> Unit,
+    layoutDensity: VaultLayoutDensity
 ) {
     Surface(
-        modifier = Modifier.fillMaxHeight().width(112.dp),
-        shape = RoundedCornerShape(30.dp),
+        modifier = Modifier.fillMaxHeight().width(layoutDensity.groupsPaneWidth),
+        shape = RoundedCornerShape(layoutDensity.paneCorner),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
         tonalElevation = 8.dp,
         shadowElevation = 12.dp
@@ -393,7 +461,7 @@ private fun LeftGroupsPane(
             }
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(layoutDensity.groupItemSpacing)
             ) {
                 items(groups) { group ->
                     val selected = group.id == selectedGroup
@@ -410,7 +478,7 @@ private fun LeftGroupsPane(
                         shadowElevation = if (selected) 10.dp else 0.dp
                     ) {
                         Column(
-                            modifier = Modifier.padding(vertical = 15.dp, horizontal = 8.dp),
+                            modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
@@ -441,17 +509,18 @@ private fun RightEntriesList(
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
     onAddClick: () -> Unit,
+    layoutDensity: VaultLayoutDensity,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier.fillMaxHeight(),
-        shape = RoundedCornerShape(30.dp),
+        shape = RoundedCornerShape(layoutDensity.paneCorner),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 4.dp,
         shadowElevation = 10.dp
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 18.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = layoutDensity.listHeaderHorizontal, vertical = layoutDensity.listHeaderVertical)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("我的凭据", style = MaterialTheme.typography.headlineSmall)
@@ -530,8 +599,14 @@ private fun RightEntriesList(
                     }
                 }
             } else {
-                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(entries) { entry -> EntryNameCard(entry = entry, onClick = { onEntryClick(entry.id) }) }
+                LazyColumn(contentPadding = PaddingValues(horizontal = layoutDensity.listHeaderHorizontal - 2.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(layoutDensity.listItemSpacing)) {
+                    items(entries) { entry ->
+                        EntryNameCard(
+                            entry = entry,
+                            onClick = { onEntryClick(entry.id) },
+                            layoutDensity = layoutDensity
+                        )
+                    }
                 }
             }
         }
@@ -539,13 +614,13 @@ private fun RightEntriesList(
 }
 
 @Composable
-private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
+private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit, layoutDensity: VaultLayoutDensity) {
     val elevation by animateDpAsState(targetValue = 4.dp, label = "entry_elevation")
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(26.dp)),
-        shape = RoundedCornerShape(26.dp),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(layoutDensity.paneCorner - 4.dp)),
+        shape = RoundedCornerShape(layoutDensity.paneCorner - 4.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = elevation,
         shadowElevation = 6.dp
@@ -554,7 +629,7 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onClick() }
-                .padding(horizontal = 18.dp, vertical = 18.dp),
+                .padding(horizontal = layoutDensity.listItemHorizontal, vertical = layoutDensity.listItemVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -668,20 +743,24 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled) {
                     onSettingsChange(settings.copy(obscureSensitiveContentEnabled = it))
                 }
+                val layoutMode = layoutDensityOf(uiScale)
                 Text(
-                    "界面缩放：${(uiScale * 100).toInt()}%",
+                    "页面密度：${layoutMode.name}",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onUiScaleChange((uiScale - 0.05f).coerceAtLeast(0.80f)) }) {
+                    TextButton(onClick = { onUiScaleChange((uiScale - 0.1f).coerceAtLeast(0.9f)) }) {
                         Icon(Icons.Rounded.Remove, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("缩小")
+                        Text("更紧凑")
                     }
-                    TextButton(onClick = { onUiScaleChange((uiScale + 0.05f).coerceAtMost(1.10f)) }) {
+                    TextButton(onClick = { onUiScaleChange(1.0f) }) {
+                        Text("标准")
+                    }
+                    TextButton(onClick = { onUiScaleChange((uiScale + 0.1f).coerceAtMost(1.1f)) }) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("放大")
+                        Text("更舒展")
                     }
                 }
             }

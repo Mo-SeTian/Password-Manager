@@ -22,7 +22,7 @@ fun PasswordManagerApp() {
     }
     val preferencesStore = remember(context) { PreferencesStore(context) }
     val securitySettings by preferencesStore.securitySettings.collectAsState(initial = SecuritySettings())
-    val uiScale by preferencesStore.uiScale.collectAsState(initial = 0.92f)
+    val uiScale by preferencesStore.uiScale.collectAsState(initial = 1.0f)
     val scope = rememberCoroutineScope()
 
     PasswordManagerTheme {

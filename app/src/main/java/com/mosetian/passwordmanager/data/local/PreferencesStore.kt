@@ -35,7 +35,7 @@ class PreferencesStore(private val context: Context) {
     }
 
     val uiScale: Flow<Float> = context.appPreferences.data.map { prefs ->
-        prefs[uiScaleKey] ?: 0.92f
+        prefs[uiScaleKey] ?: 1.0f
     }
 
     suspend fun setDarkModeEnabled(enabled: Boolean) {
