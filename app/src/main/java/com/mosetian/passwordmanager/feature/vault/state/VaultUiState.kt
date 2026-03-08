@@ -9,6 +9,7 @@ import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 
 data class VaultUiState(
     val groups: List<GroupUiModel> = emptyList(),
+    val editableGroups: List<GroupUiModel> = emptyList(),
     val visibleEntries: List<EntryUiModel> = emptyList(),
     val selectedGroup: GroupId = GroupId.All,
     val selectedEntry: EntryDetailUiModel? = null,

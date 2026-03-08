@@ -11,7 +11,7 @@ import com.mosetian.passwordmanager.data.local.entity.EntryEntity
 
 @Database(
     entities = [EntryEntity::class, EntryDetailEntity::class, CustomGroupEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PasswordManagerDatabase : RoomDatabase() {

@@ -30,7 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
@@ -65,6 +66,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -99,6 +101,7 @@ fun VaultScreen(
     var searchMode by remember { mutableStateOf(false) }
     var securitySettings by remember { mutableStateOf(SecuritySettings()) }
     var securityPanelVisible by remember { mutableStateOf(false) }
+    var uiScale by remember { mutableStateOf(0.92f) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -142,6 +145,7 @@ fun VaultScreen(
         uiState = uiState,
         securitySettings = securitySettings,
         securityPanelVisible = securityPanelVisible,
+        uiScale = uiScale,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
@@ -153,19 +157,23 @@ fun VaultScreen(
         },
         onSearchQueryChange = { searchQuery = it },
         onEntryClick = { selectedEntryId = it },
-        onAddEntry = { editorForm = EntryEditorForm() },
+        onAddEntry = {
+            val defaultGroup = if (selectedGroup is GroupId.Custom || selectedGroup == GroupId.All) selectedGroup else GroupId.All
+            editorForm = EntryEditorForm(groupId = defaultGroup)
+        },
         onEditEntry = {
             uiState.selectedEntry?.let { detail ->
+                val entry = entries.firstOrNull { it.id == detail.id }
                 editorForm = EntryEditorForm(
                     id = detail.id,
                     name = detail.name,
                     iconEmoji = detail.iconEmoji,
+                    groupId = entry?.groupId ?: GroupId.All,
                     username = detail.username,
                     password = detail.password,
                     website = detail.website.orEmpty(),
                     note = detail.note.orEmpty(),
-                    customFieldLabel = detail.customFields.firstOrNull()?.label.orEmpty(),
-                    customFieldValue = detail.customFields.firstOrNull()?.value.orEmpty()
+                    customFields = detail.customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
                 )
             }
         },
@@ -173,6 +181,7 @@ fun VaultScreen(
         onOpenSecurityPanel = { securityPanelVisible = true },
         onDismissSecurityPanel = { securityPanelVisible = false },
         onSecuritySettingsChange = { securitySettings = it },
+        onUiScaleChange = { uiScale = it },
         onDismissDetail = { selectedEntryId = null },
         onDismissEditor = { editorForm = null },
         onDismissGroupEditor = { groupEditorForm = null },
@@ -187,17 +196,14 @@ fun VaultScreen(
             }
         },
         onSaveEntry = { form ->
-            val targetGroup = when (selectedGroup) {
-                GroupId.All, GroupId.Favorites, GroupId.Recent, GroupId.Weak -> GroupId.All
-                is GroupId.Custom -> selectedGroup
-            }
+            val targetGroup = form.groupId
             val entryId = form.id?.takeIf { it.isNotBlank() } ?: (repository.getEntries().size + 1).toString()
             val entry = EntryUiModel(
                 id = entryId,
                 name = form.name.ifBlank { "未命名凭据" },
                 iconEmoji = form.iconEmoji.ifBlank { "🔐" },
                 groupId = targetGroup,
-                isFavorite = selectedGroup == GroupId.Favorites,
+                isFavorite = targetGroup == GroupId.Favorites,
                 isRecent = true,
                 isWeak = form.password.length in 1..6
             )
@@ -209,10 +215,8 @@ fun VaultScreen(
                 password = form.password,
                 website = form.website.ifBlank { null },
                 note = form.note.ifBlank { null },
-                customFields = buildList {
-                    if (form.customFieldLabel.isNotBlank() || form.customFieldValue.isNotBlank()) {
-                        add(CustomFieldUiModel(form.customFieldLabel.ifBlank { "自定义字段" }, form.customFieldValue))
-                    }
+                customFields = form.customFields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.map {
+                    it.copy(label = it.label.ifBlank { "自定义字段" })
                 }
             )
             repository.upsertEntry(entry)
@@ -243,6 +247,7 @@ private fun VaultScreenContent(
     uiState: VaultUiState,
     securitySettings: SecuritySettings,
     securityPanelVisible: Boolean,
+    uiScale: Float,
     snackbarHostState: SnackbarHostState,
     onSelectGroup: (GroupId) -> Unit,
     onToggleSearch: () -> Unit,
@@ -254,6 +259,7 @@ private fun VaultScreenContent(
     onOpenSecurityPanel: () -> Unit,
     onDismissSecurityPanel: () -> Unit,
     onSecuritySettingsChange: (SecuritySettings) -> Unit,
+    onUiScaleChange: (Float) -> Unit,
     onDismissDetail: () -> Unit,
     onDismissEditor: () -> Unit,
     onDismissGroupEditor: () -> Unit,
@@ -278,7 +284,7 @@ private fun VaultScreenContent(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
+                modifier = Modifier.fillMaxSize().padding(16.dp).scale(uiScale),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 LeftGroupsPane(
@@ -319,6 +325,7 @@ private fun VaultScreenContent(
             uiState.editorForm?.let { form ->
                 EntryEditorDialog(
                     form = form,
+                    groups = uiState.editableGroups,
                     onDismiss = onDismissEditor,
                     onFormChange = onEditorFormChange,
                     onSave = onSaveEntry
@@ -337,8 +344,10 @@ private fun VaultScreenContent(
             if (securityPanelVisible) {
                 SecuritySettingsDialog(
                     settings = securitySettings,
+                    uiScale = uiScale,
                     onDismiss = onDismissSecurityPanel,
-                    onSettingsChange = onSecuritySettingsChange
+                    onSettingsChange = onSecuritySettingsChange,
+                    onUiScaleChange = onUiScaleChange
                 )
             }
         }
@@ -548,7 +557,7 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(14.dp))
             Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -612,8 +621,10 @@ private fun EntryDetailOverlay(
 @Composable
 private fun SecuritySettingsDialog(
     settings: SecuritySettings,
+    uiScale: Float,
     onDismiss: () -> Unit,
-    onSettingsChange: (SecuritySettings) -> Unit
+    onSettingsChange: (SecuritySettings) -> Unit,
+    onUiScaleChange: (Float) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -646,6 +657,22 @@ private fun SecuritySettingsDialog(
                 }
                 SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled) {
                     onSettingsChange(settings.copy(obscureSensitiveContentEnabled = it))
+                }
+                Text(
+                    "界面缩放：${(uiScale * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { onUiScaleChange((uiScale - 0.05f).coerceAtLeast(0.80f)) }) {
+                        Icon(Icons.Rounded.Remove, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("缩小")
+                    }
+                    TextButton(onClick = { onUiScaleChange((uiScale + 0.05f).coerceAtMost(1.10f)) }) {
+                        Icon(Icons.Rounded.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("放大")
+                    }
                 }
             }
         }
@@ -690,7 +717,13 @@ private fun SecurityHintCard() {
 }
 
 @Composable
-private fun EntryEditorDialog(form: EntryEditorForm, onDismiss: () -> Unit, onFormChange: (EntryEditorForm) -> Unit, onSave: (EntryEditorForm) -> Unit) {
+private fun EntryEditorDialog(
+    form: EntryEditorForm,
+    groups: List<GroupUiModel>,
+    onDismiss: () -> Unit,
+    onFormChange: (EntryEditorForm) -> Unit,
+    onSave: (EntryEditorForm) -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -705,18 +738,70 @@ private fun EntryEditorDialog(form: EntryEditorForm, onDismiss: () -> Unit, onFo
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "当前为阶段性 V1 编辑能力，后续会继续补充更多字段与校验逻辑。",
+                    "当前已支持调整分组与多个自定义字段。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                Text("分组", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                LazyColumn(
+                    modifier = Modifier.height((groups.size.coerceAtMost(4) * 56).dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(groups) { group ->
+                        val selected = group.id == form.groupId
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onFormChange(form.copy(groupId = group.id)) },
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(group.icon, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(group.name, modifier = Modifier.weight(1f))
+                                if (selected) {
+                                    Text("已选中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
                 OutlinedTextField(form.username, { onFormChange(form.copy(username = it)) }, label = { Text("账号") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.password, { onFormChange(form.copy(password = it)) }, label = { Text("密码") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.website, { onFormChange(form.copy(website = it)) }, label = { Text("网址") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.note, { onFormChange(form.copy(note = it)) }, label = { Text("备注") }, minLines = 3, shape = RoundedCornerShape(20.dp))
-                OutlinedTextField(form.customFieldLabel, { onFormChange(form.copy(customFieldLabel = it)) }, label = { Text("自定义字段名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
-                OutlinedTextField(form.customFieldValue, { onFormChange(form.copy(customFieldValue = it)) }, label = { Text("自定义字段值") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                Text("自定义字段", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                form.customFields.forEachIndexed { index, field ->
+                    OutlinedTextField(
+                        field.label,
+                        { value ->
+                            onFormChange(form.copy(customFields = form.customFields.toMutableList().also { it[index] = field.copy(label = value) }))
+                        },
+                        label = { Text("字段名称 ${index + 1}") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    OutlinedTextField(
+                        field.value,
+                        { value ->
+                            onFormChange(form.copy(customFields = form.customFields.toMutableList().also { it[index] = field.copy(value = value) }))
+                        },
+                        label = { Text("字段值 ${index + 1}") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+                TextButton(onClick = { onFormChange(form.copy(customFields = form.customFields + CustomFieldUiModel(label = "", value = ""))) }) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("新增自定义字段")
+                }
             }
         }
     )

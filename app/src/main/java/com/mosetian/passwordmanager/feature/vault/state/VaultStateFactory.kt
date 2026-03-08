@@ -58,6 +58,7 @@ object VaultStateFactory {
     ): VaultUiState {
         return VaultUiState(
             groups = buildGroups(customGroups, entries),
+            editableGroups = buildGroups(customGroups, entries).filter { it.id !is GroupId.Favorites && it.id !is GroupId.Recent && it.id !is GroupId.Weak },
             visibleEntries = filterEntries(selectedGroup, searchQuery, entries),
             selectedGroup = selectedGroup,
             selectedEntry = selectedEntryId?.let { id -> entryDetails.firstOrNull { it.id == id } },

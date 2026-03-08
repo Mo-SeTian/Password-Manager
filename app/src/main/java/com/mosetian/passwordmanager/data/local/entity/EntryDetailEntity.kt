@@ -11,5 +11,6 @@ data class EntryDetailEntity(
     val username: String,
     val password: String,
     val website: String?,
-    val note: String?
+    val note: String?,
+    val customFieldsJson: String = "[]"
 )

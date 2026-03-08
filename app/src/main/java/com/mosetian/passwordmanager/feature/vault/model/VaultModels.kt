@@ -56,12 +56,12 @@ data class EntryEditorForm(
     val id: String? = null,
     val name: String = "",
     val iconEmoji: String = "🔐",
+    val groupId: GroupId = GroupId.All,
     val username: String = "",
     val password: String = "",
     val website: String = "",
     val note: String = "",
-    val customFieldLabel: String = "",
-    val customFieldValue: String = ""
+    val customFields: List<CustomFieldUiModel> = listOf(CustomFieldUiModel(label = "", value = ""))
 )
 
 data class GroupEditorForm(
@@ -170,8 +170,7 @@ object VaultMockData {
             password = detail.password,
             website = detail.website.orEmpty(),
             note = detail.note.orEmpty(),
-            customFieldLabel = firstCustom?.label.orEmpty(),
-            customFieldValue = firstCustom?.value.orEmpty()
+            customFields = detail.customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
         )
     }
 }

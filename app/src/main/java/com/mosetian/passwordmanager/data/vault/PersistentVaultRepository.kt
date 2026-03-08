@@ -8,11 +8,14 @@ import com.mosetian.passwordmanager.data.local.dao.EntryDetailDao
 import com.mosetian.passwordmanager.data.local.entity.CustomGroupEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryDetailEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryEntity
+import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
 
 class PersistentVaultRepository(
     private val entryDao: EntryDao,
@@ -25,7 +28,13 @@ class PersistentVaultRepository(
                 id = it.id,
                 name = it.name,
                 iconEmoji = it.iconEmoji,
-                groupId = GroupId.Custom(it.groupKey).takeUnless { key -> it.groupKey == "all" } ?: GroupId.All,
+                groupId = when (it.groupKey) {
+                    "all" -> GroupId.All
+                    "favorites" -> GroupId.Favorites
+                    "recent" -> GroupId.Recent
+                    "weak" -> GroupId.Weak
+                    else -> GroupId.Custom(it.groupKey)
+                },
                 isFavorite = it.isFavorite,
                 isWeak = it.isWeak,
                 isRecent = it.isRecent
@@ -42,7 +51,8 @@ class PersistentVaultRepository(
                 username = it.username,
                 password = it.password,
                 website = it.website,
-                note = it.note
+                note = it.note,
+                customFields = parseCustomFields(it.customFieldsJson)
             )
         }
     }
@@ -88,7 +98,8 @@ class PersistentVaultRepository(
                 username = detail.username,
                 password = detail.password,
                 website = detail.website,
-                note = detail.note
+                note = detail.note,
+                customFieldsJson = stringifyCustomFields(detail.customFields)
             )
         )
     }
@@ -96,5 +107,40 @@ class PersistentVaultRepository(
     override fun addGroup(group: GroupUiModel) = runBlocking {
         val key = (group.id as? GroupId.Custom)?.value ?: return@runBlocking
         customGroupDao.insert(CustomGroupEntity(key = key, name = group.name))
+    }
+
+    private fun stringifyCustomFields(fields: List<CustomFieldUiModel>): String {
+        return JSONArray().apply {
+            fields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.forEach { field ->
+                put(
+                    JSONObject().apply {
+                        put("label", field.label)
+                        put("value", field.value)
+                        put("isSecret", field.isSecret)
+                        put("copyable", field.copyable)
+                    }
+                )
+            }
+        }.toString()
+    }
+
+    private fun parseCustomFields(json: String): List<CustomFieldUiModel> {
+        if (json.isBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    add(
+                        CustomFieldUiModel(
+                            label = item.optString("label"),
+                            value = item.optString("value"),
+                            isSecret = item.optBoolean("isSecret", false),
+                            copyable = item.optBoolean("copyable", true)
+                        )
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
     }
 }
