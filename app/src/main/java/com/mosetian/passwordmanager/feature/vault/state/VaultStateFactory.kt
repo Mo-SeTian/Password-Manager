@@ -9,6 +9,8 @@ import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 import com.mosetian.passwordmanager.feature.vault.model.VaultMockData
 
 object VaultStateFactory {
+    private fun normalizeQuery(query: String): String = query.trim().lowercase()
+
     fun buildGroups(
         customGroups: List<GroupUiModel>,
         entries: List<EntryUiModel>
@@ -34,6 +36,7 @@ object VaultStateFactory {
         searchQuery: String,
         entries: List<EntryUiModel>
     ): List<EntryUiModel> {
+        val normalizedQuery = normalizeQuery(searchQuery)
         val groupFiltered = when (selectedGroup) {
             GroupId.All -> entries
             GroupId.Favorites -> entries.filter { it.isFavorite }
@@ -41,8 +44,8 @@ object VaultStateFactory {
             GroupId.Weak -> entries.filter { it.isWeak }
             is GroupId.Custom -> entries.filter { it.groupId == selectedGroup }
         }
-        return if (searchQuery.isBlank()) groupFiltered
-        else groupFiltered.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        return if (normalizedQuery.isBlank()) groupFiltered
+        else groupFiltered.filter { it.name.lowercase().contains(normalizedQuery) }
     }
 
     fun buildState(
@@ -55,10 +58,13 @@ object VaultStateFactory {
         entries: List<EntryUiModel>,
         customGroups: List<GroupUiModel>
     ): VaultUiState {
+        val groups = buildGroups(customGroups, entries)
+        val editableGroups = groups.filter { it.id !is GroupId.Favorites && it.id !is GroupId.Recent && it.id !is GroupId.Weak }
+        val visibleEntries = filterEntries(selectedGroup, searchQuery, entries)
         return VaultUiState(
-            groups = buildGroups(customGroups, entries),
-            editableGroups = buildGroups(customGroups, entries).filter { it.id !is GroupId.Favorites && it.id !is GroupId.Recent && it.id !is GroupId.Weak },
-            visibleEntries = filterEntries(selectedGroup, searchQuery, entries),
+            groups = groups,
+            editableGroups = editableGroups,
+            visibleEntries = visibleEntries,
             selectedGroup = selectedGroup,
             selectedEntry = selectedEntry,
             searchQuery = searchQuery,
