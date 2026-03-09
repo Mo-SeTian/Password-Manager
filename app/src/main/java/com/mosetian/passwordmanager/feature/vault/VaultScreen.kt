@@ -175,6 +175,27 @@ fun VaultScreen(
         loading = false
     }
 
+    fun upsertLocalEntry(entry: EntryUiModel) {
+        entries = buildList {
+            var replaced = false
+            entries.forEach { current ->
+                if (current.id == entry.id) {
+                    add(entry)
+                    replaced = true
+                } else {
+                    add(current)
+                }
+            }
+            if (!replaced) add(0, entry)
+        }
+    }
+
+    fun addLocalGroup(group: GroupUiModel) {
+        if (customGroups.none { it.id == group.id }) {
+            customGroups = customGroups + group
+        }
+    }
+
     suspend fun reloadSelectedEntryDetail() {
         val entryId = selectedEntryId
         if (entryId == null) {
@@ -325,9 +346,10 @@ fun VaultScreen(
                 )
                 repository.upsertEntry(entry)
                 repository.upsertEntryDetail(detail)
-                reloadVaultData()
+                upsertLocalEntry(entry)
+                selectedEntryDetail = detail
+                detailLoading = false
                 selectedEntryId = entryId
-                reloadSelectedEntryDetail()
                 editorForm = null
                 snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
             }
@@ -343,7 +365,7 @@ fun VaultScreen(
                     isBuiltIn = false
                 )
                 repository.addGroup(newGroup)
-                reloadVaultData()
+                addLocalGroup(newGroup)
                 selectedGroup = newGroup.id
                 groupEditorForm = null
                 snackbarHostState.showSnackbar("已创建分组：${newGroup.name}")

@@ -169,6 +169,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 ### 当前优化中
 - 正在优化启动卡顿：改为异步加载密码库，减少主线程同步读库与解密阻塞
 - 已开始第二轮启动优化：首屏不再全量预加载详情，改为点击条目后按需读取详情
+- 已开始第三轮交互优化：新增/编辑凭据、创建分组后尽量走局部状态更新，减少整页 reload
 - 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
 - 正在收口 debug / release 双分支策略
 - 正在把远端 release 打包链路调整为更稳定的发布流程
