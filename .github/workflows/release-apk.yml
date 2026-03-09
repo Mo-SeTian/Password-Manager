@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - debug
+      - release
   workflow_dispatch:
 
 permissions:
@@ -34,15 +37,28 @@ jobs:
       - name: 授予 gradlew 执行权限
         run: chmod +x ./gradlew
 
-      - name: 构建 Debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: 选择构建类型
+        id: build_type
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == "release" ]]; then
+            echo "variant=Release" >> $GITHUB_OUTPUT
+            echo "output_dir=app/build/outputs/apk/release" >> $GITHUB_OUTPUT
+            echo "artifact_prefix=app-releases" >> $GITHUB_OUTPUT
+          else
+            echo "variant=Debug" >> $GITHUB_OUTPUT
+            echo "output_dir=app/build/outputs/apk/debug" >> $GITHUB_OUTPUT
+            echo "artifact_prefix=app-debug" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 构建 APK
+        run: ./gradlew :app:assemble${{ steps.build_type.outputs.variant }} --stacktrace --max-workers=1
 
       - name: 定位并重命名 APK 文件
         id: apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_PATH=$(find "${{ steps.build_type.outputs.output_dir }}" -name "*.apk" | head -n 1)
           VERSION_TAG="${GITHUB_REF_NAME}"
-          RENAMED_APK="app/build/outputs/apk/debug/app-releases-${VERSION_TAG}.apk"
+          RENAMED_APK="${{ steps.build_type.outputs.output_dir }}/${{ steps.build_type.outputs.artifact_prefix }}-${VERSION_TAG}.apk"
           cp "$APK_PATH" "$RENAMED_APK"
           echo "apk_path=$RENAMED_APK" >> $GITHUB_OUTPUT
           echo "apk_name=$(basename "$RENAMED_APK")" >> $GITHUB_OUTPUT
@@ -50,13 +66,14 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: app-releases-${{ github.ref_name }}
+          name: ${{ steps.build_type.outputs.artifact_prefix }}-${{ github.ref_name }}
           path: ${{ steps.apk.outputs.apk_path }}
 
       - name: 创建 GitHub Release 并附加 APK
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.apk.outputs.apk_path }}
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: true

@@ -64,6 +64,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -161,15 +162,21 @@ fun VaultScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
+    var entryDetails by remember { mutableStateOf<List<EntryDetailUiModel>>(emptyList()) }
+    var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
 
-    val entries = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getEntries()
+    suspend fun reloadVaultData() {
+        loading = true
+        entries = repository.getEntries()
+        entryDetails = repository.getEntryDetails()
+        customGroups = repository.getCustomGroups()
+        loading = false
     }
-    val entryDetails = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getEntryDetails()
-    }
-    val customGroups = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getCustomGroups()
+
+    LaunchedEffect(repository) {
+        reloadVaultData()
     }
 
     val uiState = remember(
@@ -214,6 +221,7 @@ fun VaultScreen(
         securitySettings = securitySettings,
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
+        loading = loading,
         layoutDensity = layoutDensity,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
@@ -275,48 +283,54 @@ fun VaultScreen(
             }
         },
         onSaveEntry = { form ->
-            val targetGroup = form.groupId
-            val entryId = form.id?.takeIf { it.isNotBlank() } ?: (repository.getEntries().size + 1).toString()
-            val entry = EntryUiModel(
-                id = entryId,
-                name = form.name.ifBlank { "未命名凭据" },
-                iconEmoji = form.iconEmoji.ifBlank { "🔐" },
-                groupId = targetGroup,
-                isFavorite = targetGroup == GroupId.Favorites,
-                isRecent = true,
-                isWeak = form.password.length in 1..6
-            )
-            val detail = EntryDetailUiModel(
-                id = entryId,
-                name = entry.name,
-                iconEmoji = entry.iconEmoji,
-                username = form.username,
-                password = form.password,
-                website = form.website.ifBlank { null },
-                note = form.note.ifBlank { null },
-                customFields = form.customFields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.map {
-                    it.copy(label = it.label.ifBlank { "自定义字段" })
-                }
-            )
-            repository.upsertEntry(entry)
-            repository.upsertEntryDetail(detail)
-            selectedEntryId = entryId
-            editorForm = null
-            scope.launch { snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据") }
+            scope.launch {
+                val targetGroup = form.groupId
+                val entryId = form.id?.takeIf { it.isNotBlank() } ?: ((entries.maxOfOrNull { it.id.toIntOrNull() ?: 0 } ?: 0) + 1).toString()
+                val entry = EntryUiModel(
+                    id = entryId,
+                    name = form.name.ifBlank { "未命名凭据" },
+                    iconEmoji = form.iconEmoji.ifBlank { "🔐" },
+                    groupId = targetGroup,
+                    isFavorite = targetGroup == GroupId.Favorites,
+                    isRecent = true,
+                    isWeak = form.password.length in 1..6
+                )
+                val detail = EntryDetailUiModel(
+                    id = entryId,
+                    name = entry.name,
+                    iconEmoji = entry.iconEmoji,
+                    username = form.username,
+                    password = form.password,
+                    website = form.website.ifBlank { null },
+                    note = form.note.ifBlank { null },
+                    customFields = form.customFields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.map {
+                        it.copy(label = it.label.ifBlank { "自定义字段" })
+                    }
+                )
+                repository.upsertEntry(entry)
+                repository.upsertEntryDetail(detail)
+                reloadVaultData()
+                selectedEntryId = entryId
+                editorForm = null
+                snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
+            }
         },
         onSaveGroup = { form ->
-            val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
-            val newGroup = GroupUiModel(
-                id = GroupId.Custom(key),
-                name = form.name.ifBlank { "新分组" },
-                count = 0,
-                icon = Icons.Rounded.FolderOpen,
-                isBuiltIn = false
-            )
-            repository.addGroup(newGroup)
-            selectedGroup = newGroup.id
-            groupEditorForm = null
-            scope.launch { snackbarHostState.showSnackbar("已创建分组：${newGroup.name}") }
+            scope.launch {
+                val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
+                val newGroup = GroupUiModel(
+                    id = GroupId.Custom(key),
+                    name = form.name.ifBlank { "新分组" },
+                    count = 0,
+                    icon = Icons.Rounded.FolderOpen,
+                    isBuiltIn = false
+                )
+                repository.addGroup(newGroup)
+                reloadVaultData()
+                selectedGroup = newGroup.id
+                groupEditorForm = null
+                snackbarHostState.showSnackbar("已创建分组：${newGroup.name}")
+            }
         }
     )
 }
@@ -327,6 +341,7 @@ private fun VaultScreenContent(
     securitySettings: SecuritySettings,
     securityPanelVisible: Boolean,
     uiScale: Float,
+    loading: Boolean,
     layoutDensity: VaultLayoutDensity,
     snackbarHostState: SnackbarHostState,
     onRequestLockSetup: () -> Unit,
@@ -384,6 +399,7 @@ private fun VaultScreenContent(
                     searchQuery = uiState.searchQuery,
                     searchMode = uiState.searchMode,
                     selectedGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroup },
+                    loading = loading,
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
@@ -541,6 +557,7 @@ private fun RightEntriesList(
     searchQuery: String,
     searchMode: Boolean,
     selectedGroup: GroupUiModel?,
+    loading: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
@@ -566,7 +583,11 @@ private fun RightEntriesList(
                 onAddClick = onAddClick,
                 layoutDensity = layoutDensity
             )
-            if (entries.isEmpty()) {
+            if (loading) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
+                    Text("正在加载密码库…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (entries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
                     Surface(
                         shape = RoundedCornerShape(28.dp),

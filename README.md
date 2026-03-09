@@ -166,9 +166,16 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 解锁页支持使用生物识别或设备凭证快速解锁
 - 生物识别开关开始具备真实能力，不再只是占位项
 
+### 当前优化中
+- 正在优化启动卡顿：改为异步加载密码库，减少主线程同步读库与解密阻塞
+- 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
+- 仓库分支策略准备调整为 debug / release 双分支
+
 ## 说明
 
-当前开发环境已经具备本地 Android SDK，可进行 `compileDebugKotlin` 与 `assembleDebug` 验证。
+当前开发环境已经具备本地 Android SDK，本地只做 `compileDebugKotlin` 与 `assembleDebug` 验证。
+
+`release` 包不再要求本地打出，改为提交到 GitHub 后由 Actions 进行远端构建与发布验证。
 
 更完整的当前阶段说明见：
 - `docs/阶段性交付说明.md`
@@ -178,8 +185,11 @@ app/src/main/java/com/mosetian/passwordmanager/
 
 当前仓库已经加入 GitHub Actions 自动打包工作流：
 
-- 推送 `v*` 标签时自动构建 APK
-- 自动创建 GitHub Release
+- 日常开发以 `debug` 分支 / debug 本地验证为主
+- `release` 分支与 `v*` 标签走远端 release 打包
+- 推送 `v*` 标签时自动创建 GitHub Release
 - 自动把 APK 挂到 Release 附件
 
-当前先使用 **Debug APK** 方案，便于尽快验证打包链路。后续如果要正式分发，可以再补签名 Release APK / AAB。
+当前策略改为：
+- **本地只验证 Debug APK**，保证开发反馈速度
+- **Release APK 交给 GitHub Actions 打包**，避免本地环境在 R8 阶段阻塞研发节奏

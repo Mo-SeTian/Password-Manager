@@ -25,6 +25,7 @@ class PreferencesStore(private val context: Context) {
     private val appLockPasswordHashKey = stringPreferencesKey("app_lock_password_hash")
     private val appLockPasswordSaltKey = stringPreferencesKey("app_lock_password_salt")
     private val appLockPasswordAlgorithmKey = stringPreferencesKey("app_lock_password_algorithm")
+    private val plaintextMigrationCompletedKey = booleanPreferencesKey("plaintext_migration_completed")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -53,6 +54,10 @@ class PreferencesStore(private val context: Context) {
             passwordSalt = prefs[appLockPasswordSaltKey].orEmpty(),
             passwordAlgorithm = prefs[appLockPasswordAlgorithmKey] ?: "sha256"
         )
+    }
+
+    val plaintextMigrationCompleted: Flow<Boolean> = context.appPreferences.data.map { prefs ->
+        prefs[plaintextMigrationCompletedKey] ?: false
     }
 
     suspend fun setDarkModeEnabled(enabled: Boolean) {
@@ -85,6 +90,12 @@ class PreferencesStore(private val context: Context) {
             prefs[appLockPasswordHashKey] = state.passwordHash
             prefs[appLockPasswordSaltKey] = state.passwordSalt
             prefs[appLockPasswordAlgorithmKey] = state.passwordAlgorithm
+        }
+    }
+
+    suspend fun setPlaintextMigrationCompleted(completed: Boolean) {
+        context.appPreferences.edit { prefs ->
+            prefs[plaintextMigrationCompletedKey] = completed
         }
     }
 
