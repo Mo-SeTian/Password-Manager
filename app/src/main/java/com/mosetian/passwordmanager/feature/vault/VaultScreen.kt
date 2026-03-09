@@ -164,6 +164,7 @@ fun VaultScreen(
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
     var selectedEntryDetail by remember { mutableStateOf<EntryDetailUiModel?>(null) }
+    var detailCache by remember { mutableStateOf<Map<String, EntryDetailUiModel>>(emptyMap()) }
     var detailLoading by remember { mutableStateOf(false) }
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -196,6 +197,10 @@ fun VaultScreen(
         }
     }
 
+    fun cacheEntryDetail(detail: EntryDetailUiModel) {
+        detailCache = detailCache + (detail.id to detail)
+    }
+
     suspend fun reloadSelectedEntryDetail() {
         val entryId = selectedEntryId
         if (entryId == null) {
@@ -203,8 +208,15 @@ fun VaultScreen(
             detailLoading = false
             return
         }
+        detailCache[entryId]?.let { cached ->
+            selectedEntryDetail = cached
+            detailLoading = false
+            return
+        }
         detailLoading = true
-        selectedEntryDetail = repository.getEntryDetail(entryId)
+        val detail = repository.getEntryDetail(entryId)
+        selectedEntryDetail = detail
+        if (detail != null) cacheEntryDetail(detail)
         detailLoading = false
     }
 
@@ -347,6 +359,7 @@ fun VaultScreen(
                 repository.upsertEntry(entry)
                 repository.upsertEntryDetail(detail)
                 upsertLocalEntry(entry)
+                cacheEntryDetail(detail)
                 selectedEntryDetail = detail
                 detailLoading = false
                 selectedEntryId = entryId
