@@ -12,4 +12,5 @@ interface VaultRepository {
     fun upsertEntry(entry: EntryUiModel)
     fun upsertEntryDetail(detail: EntryDetailUiModel)
     fun addGroup(group: GroupUiModel)
+    fun migratePlaintextDataIfNeeded()
 }

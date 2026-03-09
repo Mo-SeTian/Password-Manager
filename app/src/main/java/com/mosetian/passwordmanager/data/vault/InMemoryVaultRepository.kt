@@ -29,4 +29,6 @@ class InMemoryVaultRepository : VaultRepository {
     override fun addGroup(group: GroupUiModel) {
         customGroups.add(group)
     }
+
+    override fun migratePlaintextDataIfNeeded() = Unit
 }

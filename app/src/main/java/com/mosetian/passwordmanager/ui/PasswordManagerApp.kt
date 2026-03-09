@@ -7,6 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +48,12 @@ fun PasswordManagerApp() {
     }
     val repository = remember(context, unlocked) {
         VaultRepositoryProvider.createPersistent(context)
+    }
+
+    LaunchedEffect(repository, unlocked) {
+        if (unlocked) {
+            repository.migratePlaintextDataIfNeeded()
+        }
     }
 
     DisposableEffect(lifecycleOwner, appLockState.enabled, securitySettings.autoLockOnBackgroundEnabled, unlocked) {

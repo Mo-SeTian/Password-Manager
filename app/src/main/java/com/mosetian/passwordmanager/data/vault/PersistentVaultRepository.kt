@@ -116,7 +116,7 @@ class PersistentVaultRepository(
         )
     }
 
-    fun migratePlaintextData() = runBlocking {
+    override fun migratePlaintextDataIfNeeded() = runBlocking {
         entryDao.getAll().forEach { entry ->
             val encryptedGroupKey = when (entry.groupKey) {
                 "all", "favorites", "recent", "weak" -> entry.groupKey

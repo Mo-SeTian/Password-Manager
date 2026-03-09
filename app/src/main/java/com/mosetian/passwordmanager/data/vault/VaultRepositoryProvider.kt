@@ -12,7 +12,7 @@ object VaultRepositoryProvider {
             entryDetailDao = db.entryDetailDao(),
             customGroupDao = db.customGroupDao(),
             cryptoManager = VaultCryptoManager()
-        ).also { it.migratePlaintextData() }
+        )
     }
 
     fun createInMemory(): VaultRepository = InMemoryVaultRepository()
