@@ -12,6 +12,8 @@ private val migration1To2 = object : Migration(1, 2) {
 }
 
 object DatabaseProvider {
+    private const val DATABASE_NAME = "password_manager.db"
+
     @Volatile
     private var instance: PasswordManagerDatabase? = null
 
@@ -20,8 +22,16 @@ object DatabaseProvider {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 PasswordManagerDatabase::class.java,
-                "password_manager.db"
+                DATABASE_NAME
             ).addMigrations(migration1To2).build().also { instance = it }
+        }
+    }
+
+    fun reset(context: Context) {
+        synchronized(this) {
+            instance?.close()
+            instance = null
+            context.applicationContext.deleteDatabase(DATABASE_NAME)
         }
     }
 }

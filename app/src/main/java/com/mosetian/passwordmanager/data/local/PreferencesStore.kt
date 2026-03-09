@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.mosetian.passwordmanager.feature.security.AppLockState
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +21,8 @@ class PreferencesStore(private val context: Context) {
     private val blockScreenshotsEnabledKey = booleanPreferencesKey("block_screenshots_enabled")
     private val obscureSensitiveContentEnabledKey = booleanPreferencesKey("obscure_sensitive_content_enabled")
     private val uiScaleKey = floatPreferencesKey("ui_scale")
+    private val appLockPasswordHashKey = stringPreferencesKey("app_lock_password_hash")
+    private val appLockPasswordSaltKey = stringPreferencesKey("app_lock_password_salt")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -37,6 +41,14 @@ class PreferencesStore(private val context: Context) {
 
     val uiScale: Flow<Float> = context.appPreferences.data.map { prefs ->
         prefs[uiScaleKey] ?: 0.48f
+    }
+
+    val appLockState: Flow<AppLockState> = context.appPreferences.data.map { prefs ->
+        AppLockState(
+            enabled = prefs[appLockEnabledKey] ?: false,
+            passwordHash = prefs[appLockPasswordHashKey].orEmpty(),
+            passwordSalt = prefs[appLockPasswordSaltKey].orEmpty()
+        )
     }
 
     suspend fun setDarkModeEnabled(enabled: Boolean) {
@@ -59,6 +71,20 @@ class PreferencesStore(private val context: Context) {
     suspend fun setUiScale(scale: Float) {
         context.appPreferences.edit { prefs ->
             prefs[uiScaleKey] = scale
+        }
+    }
+
+    suspend fun updateAppLockState(state: AppLockState) {
+        context.appPreferences.edit { prefs ->
+            prefs[appLockEnabledKey] = state.enabled
+            prefs[appLockPasswordHashKey] = state.passwordHash
+            prefs[appLockPasswordSaltKey] = state.passwordSalt
+        }
+    }
+
+    suspend fun clearAllPreferences() {
+        context.appPreferences.edit { prefs ->
+            prefs.clear()
         }
     }
 }
