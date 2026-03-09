@@ -92,6 +92,7 @@ import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupEditorForm
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
+import com.mosetian.passwordmanager.feature.vault.model.toEditorForm
 import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
 import kotlinx.coroutines.launch
@@ -305,17 +306,7 @@ fun VaultScreen(
         onEditEntry = {
             uiState.selectedEntry?.let { detail ->
                 val entry = entries.firstOrNull { it.id == detail.id }
-                editorForm = EntryEditorForm(
-                    id = detail.id,
-                    name = detail.name,
-                    iconEmoji = detail.iconEmoji,
-                    groupId = entry?.groupId ?: GroupId.All,
-                    username = detail.username,
-                    password = detail.password,
-                    website = detail.website.orEmpty(),
-                    note = detail.note.orEmpty(),
-                    customFields = detail.customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
-                )
+                editorForm = detail.toEditorForm(entry?.groupId ?: GroupId.All)
             }
         },
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
