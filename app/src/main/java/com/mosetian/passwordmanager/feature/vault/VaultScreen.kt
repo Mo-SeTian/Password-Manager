@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
@@ -423,67 +424,47 @@ private fun LeftGroupsPane(
         shadowElevation = 12.dp
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 10.dp, horizontal = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(layoutDensity.groupItemSpacing)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
-                if (pinnedGroups.isNotEmpty()) {
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(layoutDensity.paneCorner - 4.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.66f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                pinnedGroups.forEach { group ->
-                                    val selected = group.id == selectedGroup
-                                    Text(
-                                        text = group.name,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .clickable { onGroupClick(group.id) }
-                                            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                items(primaryGroups) { group ->
+                pinnedGroups.forEach { group ->
                     val selected = group.id == selectedGroup
-                    val scale by animateFloatAsState(if (selected) 1.012f else 1f, label = "group_scale")
-                    Surface(
+                    Text(
+                        text = group.name,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(RoundedCornerShape(layoutDensity.paneCorner - 4.dp))
-                            .clickable { onGroupClick(group.id) },
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(layoutDensity.paneCorner - 4.dp),
-                        tonalElevation = if (selected) 6.dp else 1.dp,
-                        shadowElevation = if (selected) 10.dp else 0.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = layoutDensity.groupItemVertical, horizontal = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                group.name,
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                            .clickable { onGroupClick(group.id) }
+                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height(1.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+                ) {}
+            }
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(primaryGroups) { group ->
+                    val selected = group.id == selectedGroup
+                    Text(
+                        text = group.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onGroupClick(group.id) }
+                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
             Column(
@@ -502,7 +483,7 @@ private fun LeftGroupsPane(
                     onClick = onOpenSecurityPanel,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Rounded.Lock, contentDescription = "安全设置", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Rounded.Settings, contentDescription = "安全设置", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -678,33 +659,33 @@ private fun EntryDetailOverlay(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
     ) {
         Surface(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.88f).fillMaxHeight(0.82f),
-            shape = RoundedCornerShape(30.dp),
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.84f).fillMaxHeight(0.78f),
+            shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 12.dp,
-            shadowElevation = 24.dp,
+            tonalElevation = 10.dp,
+            shadowElevation = 18.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(52.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Surface(modifier = Modifier.size(46.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                         Box(contentAlignment = Alignment.Center) { Text(entry.iconEmoji) }
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(entry.name, style = MaterialTheme.typography.headlineSmall)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("点击字段值即可复制", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("点击字段值即可复制", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary) }
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 if (obscureSensitiveContent) {
                     SecurityHintCard()
                     Spacer(modifier = Modifier.height(12.dp))
                 }
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     CopyableField("账号", entry.username, onCopy)
                     SecretCopyableField("密码", entry.password, onCopy, obscureSensitiveContent)
                     entry.website?.let { CopyableField("网址", it, onCopy) }
