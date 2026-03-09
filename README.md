@@ -166,10 +166,16 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 解锁页支持使用生物识别或设备凭证快速解锁
 - 生物识别开关开始具备真实能力，不再只是占位项
 
+### v2.0.0-alpha10
+- 启动加载路径改为异步读取，减少首页主线程阻塞
+- 本地构建策略改为只验证 debug，release 改由 GitHub Actions 远端打包
+- release APK 改为只输出 64 位 `arm64-v8a`
+- release 构建补上可安装签名，修复安装时提示证书缺失的问题
+
 ### 当前优化中
-- 正在优化启动卡顿：改为异步加载密码库，减少主线程同步读库与解密阻塞
-- 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
-- 仓库分支策略准备调整为 debug / release 双分支
+- 正在继续观察启动卡顿优化后的真实体验
+- 正在收口 debug / release 双分支策略
+- 正在把远端 release 打包链路调整为更稳定的发布流程
 
 ## 说明
 

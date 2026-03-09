@@ -13,8 +13,8 @@ android {
         applicationId = "com.mosetian.passwordmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 15
-        versionName = "2.0.0-alpha9"
+        versionCode = 16
+        versionName = "2.0.0-alpha10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -28,6 +28,7 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -57,7 +58,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
+            include("arm64-v8a")
             isUniversalApk = false
         }
     }
