@@ -29,8 +29,11 @@ import androidx.compose.ui.unit.dp
 fun AppLockScreen(
     lockEnabled: Boolean,
     hasPassword: Boolean,
+    biometricEnabled: Boolean = false,
+    biometricAvailable: Boolean = false,
     onCreatePassword: (String) -> Unit,
     onUnlock: (String) -> Boolean,
+    onBiometricUnlock: () -> Unit = {},
     onResetAllData: () -> Unit
 ) {
     var password by remember { mutableStateOf("") }
@@ -42,7 +45,9 @@ fun AppLockScreen(
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -56,6 +61,14 @@ fun AppLockScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (lockEnabled && hasPassword && biometricEnabled) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (biometricAvailable) "可使用生物识别或设备凭证快速解锁。" else "当前设备暂不可用生物识别，将继续使用主密码解锁。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Spacer(modifier = Modifier.height(20.dp))
             OutlinedTextField(
                 value = password,
@@ -106,6 +119,17 @@ fun AppLockScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (lockEnabled && hasPassword) "解锁" else "保存并进入")
+            }
+            if (lockEnabled && hasPassword && biometricEnabled && biometricAvailable) {
+                Spacer(modifier = Modifier.height(10.dp))
+                TextButton(
+                    onClick = {
+                        errorText = null
+                        onBiometricUnlock()
+                    }
+                ) {
+                    Text("使用生物识别解锁")
+                }
             }
             if (lockEnabled && hasPassword) {
                 Spacer(modifier = Modifier.height(10.dp))

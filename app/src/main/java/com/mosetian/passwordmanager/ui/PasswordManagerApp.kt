@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.view.WindowCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.mosetian.passwordmanager.data.local.DatabaseProvider
@@ -23,6 +24,7 @@ import com.mosetian.passwordmanager.data.vault.VaultRepositoryProvider
 import com.mosetian.passwordmanager.feature.security.AppLockManager
 import com.mosetian.passwordmanager.feature.security.AppLockScreen
 import com.mosetian.passwordmanager.feature.security.AppLockState
+import com.mosetian.passwordmanager.feature.security.BiometricAuthController
 import com.mosetian.passwordmanager.feature.security.ChangeAppLockPasswordDialog
 import com.mosetian.passwordmanager.feature.security.DisableAppLockDialog
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
@@ -34,8 +36,10 @@ import kotlinx.coroutines.launch
 fun PasswordManagerApp() {
     val context = LocalContext.current
     val activity = context as? Activity
+    val componentActivity = context as? FragmentActivity
     val lifecycleOwner = LocalLifecycleOwner.current
     val preferencesStore = remember(context) { PreferencesStore(context) }
+    val biometricAuthController = remember(context) { BiometricAuthController(context) }
     val appLockState by preferencesStore.appLockState.collectAsState(initial = AppLockState())
     val securitySettings by preferencesStore.securitySettings.collectAsState(initial = SecuritySettings())
     val uiScale by preferencesStore.uiScale.collectAsState(initial = 0.48f)
@@ -46,6 +50,7 @@ fun PasswordManagerApp() {
     var forcingLockSetup by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showDisableAppLockDialog by remember { mutableStateOf(false) }
+    var biometricAvailable by remember { mutableStateOf(false) }
     val repository = remember(context, unlocked) {
         VaultRepositoryProvider.createPersistent(context)
     }
@@ -54,6 +59,10 @@ fun PasswordManagerApp() {
         if (unlocked) {
             repository.migratePlaintextDataIfNeeded()
         }
+    }
+
+    LaunchedEffect(componentActivity, securitySettings.biometricUnlockEnabled) {
+        biometricAvailable = componentActivity != null && biometricAuthController.canAuthenticate()
     }
 
     DisposableEffect(lifecycleOwner, appLockState.enabled, securitySettings.autoLockOnBackgroundEnabled, unlocked) {
@@ -87,6 +96,8 @@ fun PasswordManagerApp() {
                 AppLockScreen(
                     lockEnabled = appLockState.enabled && !shouldCreatePassword,
                     hasPassword = !shouldCreatePassword,
+                    biometricEnabled = securitySettings.biometricUnlockEnabled,
+                    biometricAvailable = biometricAvailable,
                     onCreatePassword = { password ->
                         scope.launch {
                             val state = AppLockManager.create(password)
@@ -109,6 +120,15 @@ fun PasswordManagerApp() {
                             unlocked = true
                         }
                         passed
+                    },
+                    onBiometricUnlock = {
+                        val hostActivity = componentActivity ?: return@AppLockScreen
+                        biometricAuthController.authenticate(hostActivity) { success, _ ->
+                            if (success) {
+                                forcingLockSetup = false
+                                unlocked = true
+                            }
+                        }
                     },
                     onResetAllData = {
                         scope.launch {

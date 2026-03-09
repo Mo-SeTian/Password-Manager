@@ -13,8 +13,8 @@ android {
         applicationId = "com.mosetian.passwordmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.0.0-alpha8"
+        versionCode = 15
+        versionName = "2.0.0-alpha9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.google.material)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.adaptive)
     implementation(libs.androidx.adaptive.layout)
     implementation(libs.androidx.adaptive.navigation)

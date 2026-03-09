@@ -161,6 +161,11 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 关闭应用锁前要求校验当前主密码
 - 主密码校验升级为更稳的 KDF，并兼容旧密码数据自动升级
 
+### v2.0.0-alpha9
+- 接入生物识别解锁 MVP 入口
+- 解锁页支持使用生物识别或设备凭证快速解锁
+- 生物识别开关开始具备真实能力，不再只是占位项
+
 ## 说明
 
 当前开发环境已经具备本地 Android SDK，可进行 `compileDebugKotlin` 与 `assembleDebug` 验证。
