@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -179,6 +180,19 @@ fun VaultScreen(
             entryDetails = entryDetails,
             customGroups = customGroups
         )
+    }
+
+    BackHandler(enabled = selectedEntryId != null) {
+        selectedEntryId = null
+    }
+    BackHandler(enabled = editorForm != null) {
+        editorForm = null
+    }
+    BackHandler(enabled = groupEditorForm != null) {
+        groupEditorForm = null
+    }
+    BackHandler(enabled = securityPanelVisible) {
+        securityPanelVisible = false
     }
 
     VaultScreenContent(
@@ -419,9 +433,10 @@ private fun LeftGroupsPane(
     Surface(
         modifier = Modifier.fillMaxHeight().width(layoutDensity.groupsPaneWidth),
         shape = RoundedCornerShape(layoutDensity.paneCorner),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
-        tonalElevation = 8.dp,
-        shadowElevation = 12.dp
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 2.dp,
+        shadowElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -435,8 +450,10 @@ private fun LeftGroupsPane(
                         text = group.name,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onGroupClick(group.id) }
-                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                            .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else Color.Transparent)
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
@@ -444,7 +461,7 @@ private fun LeftGroupsPane(
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     modifier = Modifier.fillMaxWidth().height(1.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                 ) {}
             }
             LazyColumn(
@@ -458,8 +475,10 @@ private fun LeftGroupsPane(
                         text = group.name,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onGroupClick(group.id) }
-                            .padding(horizontal = 4.dp, vertical = 10.dp),
+                            .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else Color.Transparent)
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
