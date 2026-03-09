@@ -8,6 +8,7 @@ import com.mosetian.passwordmanager.data.local.dao.EntryDetailDao
 import com.mosetian.passwordmanager.data.local.entity.CustomGroupEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryDetailEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryEntity
+import com.mosetian.passwordmanager.data.security.VaultCryptoManager
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
@@ -20,20 +21,21 @@ import org.json.JSONObject
 class PersistentVaultRepository(
     private val entryDao: EntryDao,
     private val entryDetailDao: EntryDetailDao,
-    private val customGroupDao: CustomGroupDao
+    private val customGroupDao: CustomGroupDao,
+    private val cryptoManager: VaultCryptoManager
 ) : VaultRepository {
     override fun getEntries(): List<EntryUiModel> = runBlocking {
         entryDao.getAll().map {
             EntryUiModel(
                 id = it.id,
-                name = it.name,
-                iconEmoji = it.iconEmoji,
+                name = cryptoManager.decrypt(it.name),
+                iconEmoji = cryptoManager.decrypt(it.iconEmoji),
                 groupId = when (it.groupKey) {
                     "all" -> GroupId.All
                     "favorites" -> GroupId.Favorites
                     "recent" -> GroupId.Recent
                     "weak" -> GroupId.Weak
-                    else -> GroupId.Custom(it.groupKey)
+                    else -> GroupId.Custom(cryptoManager.decrypt(it.groupKey))
                 },
                 isFavorite = it.isFavorite,
                 isWeak = it.isWeak,
@@ -46,12 +48,12 @@ class PersistentVaultRepository(
         entryDetailDao.getAll().map {
             EntryDetailUiModel(
                 id = it.id,
-                name = it.name,
-                iconEmoji = it.iconEmoji,
-                username = it.username,
-                password = it.password,
-                website = it.website,
-                note = it.note,
+                name = cryptoManager.decrypt(it.name),
+                iconEmoji = cryptoManager.decrypt(it.iconEmoji),
+                username = cryptoManager.decrypt(it.username),
+                password = cryptoManager.decrypt(it.password),
+                website = it.website?.let(cryptoManager::decrypt),
+                note = it.note?.let(cryptoManager::decrypt),
                 customFields = parseCustomFields(it.customFieldsJson)
             )
         }
@@ -61,7 +63,7 @@ class PersistentVaultRepository(
         customGroupDao.getAll().map {
             GroupUiModel(
                 id = GroupId.Custom(it.key),
-                name = it.name,
+                name = cryptoManager.decrypt(it.name),
                 count = 0,
                 icon = Icons.Rounded.Folder,
                 isBuiltIn = false
@@ -73,14 +75,14 @@ class PersistentVaultRepository(
         entryDao.upsert(
             EntryEntity(
                 id = entry.id,
-                name = entry.name,
-                iconEmoji = entry.iconEmoji,
+                name = cryptoManager.encrypt(entry.name),
+                iconEmoji = cryptoManager.encrypt(entry.iconEmoji),
                 groupKey = when (val group = entry.groupId) {
                     GroupId.All -> "all"
                     GroupId.Favorites -> "favorites"
                     GroupId.Recent -> "recent"
                     GroupId.Weak -> "weak"
-                    is GroupId.Custom -> group.value
+                    is GroupId.Custom -> cryptoManager.encrypt(group.value)
                 },
                 isFavorite = entry.isFavorite,
                 isWeak = entry.isWeak,
@@ -93,12 +95,12 @@ class PersistentVaultRepository(
         entryDetailDao.upsert(
             EntryDetailEntity(
                 id = detail.id,
-                name = detail.name,
-                iconEmoji = detail.iconEmoji,
-                username = detail.username,
-                password = detail.password,
-                website = detail.website,
-                note = detail.note,
+                name = cryptoManager.encrypt(detail.name),
+                iconEmoji = cryptoManager.encrypt(detail.iconEmoji),
+                username = cryptoManager.encrypt(detail.username),
+                password = cryptoManager.encrypt(detail.password),
+                website = detail.website?.let(cryptoManager::encrypt),
+                note = detail.note?.let(cryptoManager::encrypt),
                 customFieldsJson = stringifyCustomFields(detail.customFields)
             )
         )
@@ -106,7 +108,48 @@ class PersistentVaultRepository(
 
     override fun addGroup(group: GroupUiModel) = runBlocking {
         val key = (group.id as? GroupId.Custom)?.value ?: return@runBlocking
-        customGroupDao.insert(CustomGroupEntity(key = key, name = group.name))
+        customGroupDao.insert(
+            CustomGroupEntity(
+                key = key,
+                name = cryptoManager.encrypt(group.name)
+            )
+        )
+    }
+
+    fun migratePlaintextData() = runBlocking {
+        entryDao.getAll().forEach { entry ->
+            val encryptedGroupKey = when (entry.groupKey) {
+                "all", "favorites", "recent", "weak" -> entry.groupKey
+                else -> cryptoManager.encrypt(cryptoManager.decrypt(entry.groupKey))
+            }
+            entryDao.upsert(
+                entry.copy(
+                    name = cryptoManager.encrypt(cryptoManager.decrypt(entry.name)),
+                    iconEmoji = cryptoManager.encrypt(cryptoManager.decrypt(entry.iconEmoji)),
+                    groupKey = encryptedGroupKey
+                )
+            )
+        }
+
+        entryDetailDao.getAll().forEach { detail ->
+            entryDetailDao.upsert(
+                detail.copy(
+                    name = cryptoManager.encrypt(cryptoManager.decrypt(detail.name)),
+                    iconEmoji = cryptoManager.encrypt(cryptoManager.decrypt(detail.iconEmoji)),
+                    username = cryptoManager.encrypt(cryptoManager.decrypt(detail.username)),
+                    password = cryptoManager.encrypt(cryptoManager.decrypt(detail.password)),
+                    website = detail.website?.let { cryptoManager.encrypt(cryptoManager.decrypt(it)) },
+                    note = detail.note?.let { cryptoManager.encrypt(cryptoManager.decrypt(it)) },
+                    customFieldsJson = stringifyCustomFields(parseCustomFields(detail.customFieldsJson))
+                )
+            )
+        }
+
+        customGroupDao.getAll().forEach { group ->
+            customGroupDao.insert(
+                group.copy(name = cryptoManager.encrypt(cryptoManager.decrypt(group.name)))
+            )
+        }
     }
 
     private fun stringifyCustomFields(fields: List<CustomFieldUiModel>): String {
@@ -114,8 +157,8 @@ class PersistentVaultRepository(
             fields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.forEach { field ->
                 put(
                     JSONObject().apply {
-                        put("label", field.label)
-                        put("value", field.value)
+                        put("label", cryptoManager.encrypt(field.label))
+                        put("value", cryptoManager.encrypt(field.value))
                         put("isSecret", field.isSecret)
                         put("copyable", field.copyable)
                     }
@@ -133,8 +176,8 @@ class PersistentVaultRepository(
                     val item = array.optJSONObject(index) ?: continue
                     add(
                         CustomFieldUiModel(
-                            label = item.optString("label"),
-                            value = item.optString("value"),
+                            label = cryptoManager.decrypt(item.optString("label")),
+                            value = cryptoManager.decrypt(item.optString("value")),
                             isSecret = item.optBoolean("isSecret", false),
                             copyable = item.optBoolean("copyable", true)
                         )
