@@ -292,6 +292,10 @@ fun VaultScreen(
         onSearchQueryChange = { searchQuery = it },
         onEntryClick = {
             if (selectedEntryId == it && selectedEntryDetail != null) return@VaultScreenContent
+            detailCache[it]?.let { cached ->
+                selectedEntryDetail = cached
+                detailLoading = false
+            }
             selectedEntryId = it
         },
         onAddEntry = {
