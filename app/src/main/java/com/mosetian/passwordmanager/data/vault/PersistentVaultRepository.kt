@@ -43,19 +43,12 @@ class PersistentVaultRepository(
         }
     }
 
+    override suspend fun getEntryDetail(id: String): EntryDetailUiModel? {
+        return entryDetailDao.getById(id)?.toUiModel()
+    }
+
     override suspend fun getEntryDetails(): List<EntryDetailUiModel> {
-        return entryDetailDao.getAll().map {
-            EntryDetailUiModel(
-                id = it.id,
-                name = cryptoManager.decrypt(it.name),
-                iconEmoji = cryptoManager.decrypt(it.iconEmoji),
-                username = cryptoManager.decrypt(it.username),
-                password = cryptoManager.decrypt(it.password),
-                website = it.website?.let(cryptoManager::decrypt),
-                note = it.note?.let(cryptoManager::decrypt),
-                customFields = parseCustomFields(it.customFieldsJson)
-            )
-        }
+        return entryDetailDao.getAll().map { it.toUiModel() }
     }
 
     override suspend fun getCustomGroups(): List<GroupUiModel> {
@@ -173,6 +166,19 @@ class PersistentVaultRepository(
                 group.copy(name = cryptoManager.encrypt(cryptoManager.decrypt(group.name)))
             )
         }
+    }
+
+    private fun EntryDetailEntity.toUiModel(): EntryDetailUiModel {
+        return EntryDetailUiModel(
+            id = id,
+            name = cryptoManager.decrypt(name),
+            iconEmoji = cryptoManager.decrypt(iconEmoji),
+            username = cryptoManager.decrypt(username),
+            password = cryptoManager.decrypt(password),
+            website = website?.let(cryptoManager::decrypt),
+            note = note?.let(cryptoManager::decrypt),
+            customFields = parseCustomFields(customFieldsJson)
+        )
     }
 
     private fun stringifyCustomFields(fields: List<CustomFieldUiModel>): String {

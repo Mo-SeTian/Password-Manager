@@ -47,13 +47,12 @@ object VaultStateFactory {
 
     fun buildState(
         selectedGroup: GroupId,
-        selectedEntryId: String?,
+        selectedEntry: EntryDetailUiModel?,
         searchQuery: String,
         searchMode: Boolean,
         editorForm: EntryEditorForm?,
         groupEditorForm: GroupEditorForm?,
         entries: List<EntryUiModel>,
-        entryDetails: List<EntryDetailUiModel>,
         customGroups: List<GroupUiModel>
     ): VaultUiState {
         return VaultUiState(
@@ -61,7 +60,7 @@ object VaultStateFactory {
             editableGroups = buildGroups(customGroups, entries).filter { it.id !is GroupId.Favorites && it.id !is GroupId.Recent && it.id !is GroupId.Weak },
             visibleEntries = filterEntries(selectedGroup, searchQuery, entries),
             selectedGroup = selectedGroup,
-            selectedEntry = selectedEntryId?.let { id -> entryDetails.firstOrNull { it.id == id } },
+            selectedEntry = selectedEntry,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,

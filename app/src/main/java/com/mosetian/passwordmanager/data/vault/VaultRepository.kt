@@ -6,6 +6,7 @@ import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 
 interface VaultRepository {
     suspend fun getEntries(): List<EntryUiModel>
+    suspend fun getEntryDetail(id: String): EntryDetailUiModel?
     suspend fun getEntryDetails(): List<EntryDetailUiModel>
     suspend fun getCustomGroups(): List<GroupUiModel>
 

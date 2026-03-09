@@ -163,20 +163,36 @@ fun VaultScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
-    var entryDetails by remember { mutableStateOf<List<EntryDetailUiModel>>(emptyList()) }
+    var selectedEntryDetail by remember { mutableStateOf<EntryDetailUiModel?>(null) }
+    var detailLoading by remember { mutableStateOf(false) }
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
     suspend fun reloadVaultData() {
         loading = true
         entries = repository.getEntries()
-        entryDetails = repository.getEntryDetails()
         customGroups = repository.getCustomGroups()
         loading = false
     }
 
+    suspend fun reloadSelectedEntryDetail() {
+        val entryId = selectedEntryId
+        if (entryId == null) {
+            selectedEntryDetail = null
+            detailLoading = false
+            return
+        }
+        detailLoading = true
+        selectedEntryDetail = repository.getEntryDetail(entryId)
+        detailLoading = false
+    }
+
     LaunchedEffect(repository) {
         reloadVaultData()
+    }
+
+    LaunchedEffect(repository, selectedEntryId) {
+        reloadSelectedEntryDetail()
     }
 
     val uiState = remember(
@@ -187,18 +203,17 @@ fun VaultScreen(
         editorForm,
         groupEditorForm,
         entries,
-        entryDetails,
+        selectedEntryDetail,
         customGroups
     ) {
         VaultStateFactory.buildState(
             selectedGroup = selectedGroup,
-            selectedEntryId = selectedEntryId,
+            selectedEntry = selectedEntryDetail,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,
             groupEditorForm = groupEditorForm,
             entries = entries,
-            entryDetails = entryDetails,
             customGroups = customGroups
         )
     }
@@ -222,6 +237,7 @@ fun VaultScreen(
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
         loading = loading,
+        detailLoading = detailLoading,
         layoutDensity = layoutDensity,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
@@ -311,6 +327,7 @@ fun VaultScreen(
                 repository.upsertEntryDetail(detail)
                 reloadVaultData()
                 selectedEntryId = entryId
+                reloadSelectedEntryDetail()
                 editorForm = null
                 snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
             }
@@ -342,6 +359,7 @@ private fun VaultScreenContent(
     securityPanelVisible: Boolean,
     uiScale: Float,
     loading: Boolean,
+    detailLoading: Boolean,
     layoutDensity: VaultLayoutDensity,
     snackbarHostState: SnackbarHostState,
     onRequestLockSetup: () -> Unit,
@@ -410,18 +428,44 @@ private fun VaultScreenContent(
             }
 
             AnimatedVisibility(
-                visible = uiState.selectedEntry != null,
+                visible = detailLoading || uiState.selectedEntry != null,
                 enter = fadeIn() + scaleIn(initialScale = 0.96f),
                 exit = fadeOut() + scaleOut(targetScale = 0.96f)
             ) {
-                uiState.selectedEntry?.let { entry ->
-                    EntryDetailOverlay(
-                        entry = entry,
-                        onDismiss = onDismissDetail,
-                        onEdit = onEditEntry,
-                        onCopy = onCopyField,
-                        obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
-                    )
+                when {
+                    detailLoading -> {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.18f)),
+                            color = Color.Transparent
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 8.dp,
+                                    shadowElevation = 24.dp
+                                ) {
+                                    Text(
+                                        text = "正在读取详情…",
+                                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    uiState.selectedEntry != null -> {
+                        EntryDetailOverlay(
+                            entry = uiState.selectedEntry,
+                            onDismiss = onDismissDetail,
+                            onEdit = onEditEntry,
+                            onCopy = onCopyField,
+                            obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
+                        )
+                    }
                 }
             }
 
