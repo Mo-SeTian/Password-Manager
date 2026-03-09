@@ -41,6 +41,7 @@ fun PasswordManagerApp() {
     var unlocked by remember(appLockState.enabled, appLockState.passwordHash, appLockState.passwordSalt) {
         mutableStateOf(!appLockState.enabled || appLockState.passwordHash.isBlank())
     }
+    var forcingLockSetup by remember { mutableStateOf(false) }
     val repository = remember(context, unlocked) {
         VaultRepositoryProvider.createPersistent(context)
     }
@@ -73,29 +74,37 @@ fun PasswordManagerApp() {
         }
     }
 
+    val shouldShowLockScreen = forcingLockSetup || !unlocked
+    val shouldCreatePassword = forcingLockSetup || appLockState.passwordHash.isBlank()
+
     PasswordManagerTheme(darkTheme = securitySettings.darkModeEnabled) {
         Surface {
-            if (!unlocked) {
+            if (shouldShowLockScreen) {
                 AppLockScreen(
-                    lockEnabled = appLockState.enabled,
-                    hasPassword = appLockState.passwordHash.isNotBlank(),
+                    lockEnabled = appLockState.enabled && !shouldCreatePassword,
+                    hasPassword = !shouldCreatePassword,
                     onCreatePassword = { password ->
                         scope.launch {
                             val state = AppLockManager.create(password)
                             preferencesStore.updateAppLockState(state)
                             preferencesStore.updateSecuritySettings(securitySettings.copy(appLockEnabled = true))
+                            forcingLockSetup = false
                             unlocked = true
                         }
                     },
                     onUnlock = { password ->
                         val passed = AppLockManager.verify(password, appLockState)
-                        if (passed) unlocked = true
+                        if (passed) {
+                            forcingLockSetup = false
+                            unlocked = true
+                        }
                         passed
                     },
                     onResetAllData = {
                         scope.launch {
                             DatabaseProvider.reset(context)
                             preferencesStore.clearAllPreferences()
+                            forcingLockSetup = false
                             unlocked = true
                         }
                     }
@@ -108,6 +117,7 @@ fun PasswordManagerApp() {
                     onSecuritySettingsChange = { settings ->
                         scope.launch { preferencesStore.updateSecuritySettings(settings) }
                         if (!settings.appLockEnabled) {
+                            forcingLockSetup = false
                             scope.launch { preferencesStore.updateAppLockState(AppLockState()) }
                         }
                     },
@@ -115,10 +125,14 @@ fun PasswordManagerApp() {
                         scope.launch { preferencesStore.setUiScale(scale) }
                     },
                     onRequestLockSetup = {
+                        forcingLockSetup = true
                         unlocked = false
                     },
                     onRequestLockNow = {
-                        if (appLockState.enabled) unlocked = false
+                        if (appLockState.enabled) {
+                            forcingLockSetup = false
+                            unlocked = false
+                        }
                     }
                 )
             }

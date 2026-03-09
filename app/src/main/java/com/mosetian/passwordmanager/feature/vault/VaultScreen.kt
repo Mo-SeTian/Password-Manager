@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -757,15 +758,21 @@ private fun SecuritySettingsDialog(
         },
         title = { Text("安全设置") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Text(
                     "这是第一版安全能力结构，后续会继续接入应用锁、生物识别、截图保护和剪贴板自动清理。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                SecuritySettingRow("启用应用锁", settings.appLockEnabled) {
-                    onSettingsChange(settings.copy(appLockEnabled = it))
-                    if (it) onRequestLockSetup()
+                SecuritySettingRow("启用应用锁", settings.appLockEnabled) { enabled ->
+                    onSettingsChange(settings.copy(appLockEnabled = enabled))
+                    if (enabled) onRequestLockSetup()
                 }
                 if (settings.appLockEnabled) {
                     TextButton(onClick = onRequestLockNow) {

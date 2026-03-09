@@ -147,6 +147,15 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 回退有问题的全局自动字号适配
 - 恢复启动稳定性
 
+### v2.0.0-alpha6
+- README 补齐到当前 v2 alpha 进度
+- 屏幕尺寸适配改为只调整布局密度，不再全局缩放字体
+
+### v2.0.0-alpha7
+- 安全设置弹窗支持滚动，修复底部选项点不到
+- 打开应用锁时直接进入主密码设置流程
+- 继续保持每次发版同步更新 README
+
 ## 说明
 
 当前开发环境已经具备本地 Android SDK，可进行 `compileDebugKotlin` 与 `assembleDebug` 验证。

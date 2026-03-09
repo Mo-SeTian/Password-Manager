@@ -13,8 +13,8 @@ android {
         applicationId = "com.mosetian.passwordmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.0.0-alpha6"
+        versionCode = 13
+        versionName = "2.0.0-alpha7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
