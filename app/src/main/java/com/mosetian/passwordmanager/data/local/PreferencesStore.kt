@@ -21,6 +21,7 @@ class PreferencesStore(private val context: Context) {
     private val blockScreenshotsEnabledKey = booleanPreferencesKey("block_screenshots_enabled")
     private val obscureSensitiveContentEnabledKey = booleanPreferencesKey("obscure_sensitive_content_enabled")
     private val uiScaleKey = floatPreferencesKey("ui_scale")
+    private val autoLockOnBackgroundEnabledKey = booleanPreferencesKey("auto_lock_on_background_enabled")
     private val appLockPasswordHashKey = stringPreferencesKey("app_lock_password_hash")
     private val appLockPasswordSaltKey = stringPreferencesKey("app_lock_password_salt")
 
@@ -35,7 +36,8 @@ class PreferencesStore(private val context: Context) {
             autoClearClipboardEnabled = prefs[autoClearClipboardEnabledKey] ?: true,
             blockScreenshotsEnabled = prefs[blockScreenshotsEnabledKey] ?: false,
             obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: false,
-            darkModeEnabled = prefs[darkModeKey] ?: true
+            darkModeEnabled = prefs[darkModeKey] ?: true,
+            autoLockOnBackgroundEnabled = prefs[autoLockOnBackgroundEnabledKey] ?: true
         )
     }
 
@@ -65,6 +67,7 @@ class PreferencesStore(private val context: Context) {
             prefs[blockScreenshotsEnabledKey] = settings.blockScreenshotsEnabled
             prefs[obscureSensitiveContentEnabledKey] = settings.obscureSensitiveContentEnabled
             prefs[darkModeKey] = settings.darkModeEnabled
+            prefs[autoLockOnBackgroundEnabledKey] = settings.autoLockOnBackgroundEnabled
         }
     }
 

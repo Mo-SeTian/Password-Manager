@@ -778,6 +778,9 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("深色模式", settings.darkModeEnabled) {
                     onSettingsChange(settings.copy(darkModeEnabled = it))
                 }
+                SecuritySettingRow("切到后台自动锁定", settings.autoLockOnBackgroundEnabled) {
+                    onSettingsChange(settings.copy(autoLockOnBackgroundEnabled = it))
+                }
                 Text(
                     "页面密度（拖动条）: ${String.format("%.2f", uiScale)}x",
                     style = MaterialTheme.typography.bodyLarge
