@@ -203,10 +203,12 @@ class PersistentVaultRepository(
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
+                    val rawLabel = item.optString("label")
+                    val rawValue = item.optString("value")
                     add(
                         CustomFieldUiModel(
-                            label = item.optString("label"),
-                            value = item.optString("value"),
+                            label = cryptoManager.decrypt(rawLabel),
+                            value = cryptoManager.decrypt(rawValue),
                             isSecret = item.optBoolean("isSecret", false),
                             copyable = item.optBoolean("copyable", true)
                         )
