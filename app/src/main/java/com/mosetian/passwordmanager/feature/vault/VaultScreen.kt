@@ -251,6 +251,15 @@ fun VaultScreen(
         )
     }
 
+    LaunchedEffect(uiState.visibleEntries, selectedEntryId) {
+        val currentId = selectedEntryId ?: return@LaunchedEffect
+        if (uiState.visibleEntries.none { it.id == currentId }) {
+            selectedEntryId = null
+            selectedEntryDetail = null
+            detailLoading = false
+        }
+    }
+
     BackHandler(enabled = selectedEntryId != null) {
         selectedEntryId = null
     }
@@ -275,14 +284,16 @@ fun VaultScreen(
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
-            selectedEntryId = null
         },
         onToggleSearch = {
             searchMode = !searchMode
             if (!searchMode) searchQuery = ""
         },
         onSearchQueryChange = { searchQuery = it },
-        onEntryClick = { selectedEntryId = it },
+        onEntryClick = {
+            if (selectedEntryId == it && selectedEntryDetail != null) return@VaultScreenContent
+            selectedEntryId = it
+        },
         onAddEntry = {
             val defaultGroup = if (selectedGroup is GroupId.Custom || selectedGroup == GroupId.All) selectedGroup else GroupId.All
             editorForm = EntryEditorForm(groupId = defaultGroup)
