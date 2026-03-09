@@ -23,6 +23,8 @@ import com.mosetian.passwordmanager.data.vault.VaultRepositoryProvider
 import com.mosetian.passwordmanager.feature.security.AppLockManager
 import com.mosetian.passwordmanager.feature.security.AppLockScreen
 import com.mosetian.passwordmanager.feature.security.AppLockState
+import com.mosetian.passwordmanager.feature.security.ChangeAppLockPasswordDialog
+import com.mosetian.passwordmanager.feature.security.DisableAppLockDialog
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import com.mosetian.passwordmanager.feature.vault.VaultScreen
 import com.mosetian.passwordmanager.ui.theme.PasswordManagerTheme
@@ -42,6 +44,8 @@ fun PasswordManagerApp() {
         mutableStateOf(!appLockState.enabled || appLockState.passwordHash.isBlank())
     }
     var forcingLockSetup by remember { mutableStateOf(false) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showDisableAppLockDialog by remember { mutableStateOf(false) }
     val repository = remember(context, unlocked) {
         VaultRepositoryProvider.createPersistent(context)
     }
@@ -95,6 +99,12 @@ fun PasswordManagerApp() {
                     onUnlock = { password ->
                         val passed = AppLockManager.verify(password, appLockState)
                         if (passed) {
+                            scope.launch {
+                                val upgradedState = AppLockManager.upgradeIfNeeded(password, appLockState)
+                                if (upgradedState != appLockState) {
+                                    preferencesStore.updateAppLockState(upgradedState)
+                                }
+                            }
                             forcingLockSetup = false
                             unlocked = true
                         }
@@ -132,6 +142,46 @@ fun PasswordManagerApp() {
                         if (appLockState.enabled) {
                             forcingLockSetup = false
                             unlocked = false
+                        }
+                    },
+                    onRequestChangePassword = {
+                        showChangePasswordDialog = true
+                    },
+                    onRequestDisableAppLock = {
+                        showDisableAppLockDialog = true
+                    }
+                )
+            }
+
+            if (showChangePasswordDialog) {
+                ChangeAppLockPasswordDialog(
+                    onDismiss = { showChangePasswordDialog = false },
+                    onSubmit = { currentPassword, newPassword ->
+                        val updatedState = AppLockManager.changePassword(currentPassword, newPassword, appLockState)
+                        if (updatedState == null) {
+                            "当前主密码错误"
+                        } else {
+                            scope.launch { preferencesStore.updateAppLockState(updatedState) }
+                            showChangePasswordDialog = false
+                            null
+                        }
+                    }
+                )
+            }
+
+            if (showDisableAppLockDialog) {
+                DisableAppLockDialog(
+                    onDismiss = { showDisableAppLockDialog = false },
+                    onSubmit = { currentPassword ->
+                        if (!AppLockManager.verify(currentPassword, appLockState)) {
+                            "当前主密码错误"
+                        } else {
+                            showDisableAppLockDialog = false
+                            scope.launch {
+                                preferencesStore.updateSecuritySettings(securitySettings.copy(appLockEnabled = false))
+                                preferencesStore.updateAppLockState(AppLockState())
+                            }
+                            null
                         }
                     }
                 )

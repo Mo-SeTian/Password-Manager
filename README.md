@@ -156,6 +156,11 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 打开应用锁时直接进入主密码设置流程
 - 继续保持每次发版同步更新 README
 
+### v2.0.0-alpha8
+- 支持修改主密码
+- 关闭应用锁前要求校验当前主密码
+- 主密码校验升级为更稳的 KDF，并兼容旧密码数据自动升级
+
 ## 说明
 
 当前开发环境已经具备本地 Android SDK，可进行 `compileDebugKotlin` 与 `assembleDebug` 验证。

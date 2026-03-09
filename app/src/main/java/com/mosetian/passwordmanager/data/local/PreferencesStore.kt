@@ -24,6 +24,7 @@ class PreferencesStore(private val context: Context) {
     private val autoLockOnBackgroundEnabledKey = booleanPreferencesKey("auto_lock_on_background_enabled")
     private val appLockPasswordHashKey = stringPreferencesKey("app_lock_password_hash")
     private val appLockPasswordSaltKey = stringPreferencesKey("app_lock_password_salt")
+    private val appLockPasswordAlgorithmKey = stringPreferencesKey("app_lock_password_algorithm")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -49,7 +50,8 @@ class PreferencesStore(private val context: Context) {
         AppLockState(
             enabled = prefs[appLockEnabledKey] ?: false,
             passwordHash = prefs[appLockPasswordHashKey].orEmpty(),
-            passwordSalt = prefs[appLockPasswordSaltKey].orEmpty()
+            passwordSalt = prefs[appLockPasswordSaltKey].orEmpty(),
+            passwordAlgorithm = prefs[appLockPasswordAlgorithmKey] ?: "sha256"
         )
     }
 
@@ -82,6 +84,7 @@ class PreferencesStore(private val context: Context) {
             prefs[appLockEnabledKey] = state.enabled
             prefs[appLockPasswordHashKey] = state.passwordHash
             prefs[appLockPasswordSaltKey] = state.passwordSalt
+            prefs[appLockPasswordAlgorithmKey] = state.passwordAlgorithm
         }
     }
 

@@ -135,7 +135,9 @@ fun VaultScreen(
     onSecuritySettingsChange: (SecuritySettings) -> Unit = {},
     onUiScaleChange: (Float) -> Unit = {},
     onRequestLockSetup: () -> Unit = {},
-    onRequestLockNow: () -> Unit = {}
+    onRequestLockNow: () -> Unit = {},
+    onRequestChangePassword: () -> Unit = {},
+    onRequestDisableAppLock: () -> Unit = {}
 ) {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var selectedEntryId by remember { mutableStateOf<String?>(null) }
@@ -259,6 +261,8 @@ fun VaultScreen(
         onDismissEditor = { editorForm = null },
         onRequestLockSetup = onRequestLockSetup,
         onRequestLockNow = onRequestLockNow,
+        onRequestChangePassword = onRequestChangePassword,
+        onRequestDisableAppLock = onRequestDisableAppLock,
         onDismissGroupEditor = { groupEditorForm = null },
         onEditorFormChange = { editorForm = it },
         onGroupEditorFormChange = { groupEditorForm = it },
@@ -327,6 +331,8 @@ private fun VaultScreenContent(
     snackbarHostState: SnackbarHostState,
     onRequestLockSetup: () -> Unit,
     onRequestLockNow: () -> Unit,
+    onRequestChangePassword: () -> Unit,
+    onRequestDisableAppLock: () -> Unit,
     onSelectGroup: (GroupId) -> Unit,
     onToggleSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -430,7 +436,9 @@ private fun VaultScreenContent(
                     onSettingsChange = onSecuritySettingsChange,
                     onUiScaleChange = onUiScaleChange,
                     onRequestLockSetup = onRequestLockSetup,
-                    onRequestLockNow = onRequestLockNow
+                    onRequestLockNow = onRequestLockNow,
+                    onRequestChangePassword = onRequestChangePassword,
+                    onRequestDisableAppLock = onRequestDisableAppLock
                 )
             }
         }
@@ -745,7 +753,9 @@ private fun SecuritySettingsDialog(
     onSettingsChange: (SecuritySettings) -> Unit,
     onUiScaleChange: (Float) -> Unit,
     onRequestLockSetup: () -> Unit,
-    onRequestLockNow: () -> Unit
+    onRequestLockNow: () -> Unit,
+    onRequestChangePassword: () -> Unit,
+    onRequestDisableAppLock: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -771,12 +781,21 @@ private fun SecuritySettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 SecuritySettingRow("启用应用锁", settings.appLockEnabled) { enabled ->
-                    onSettingsChange(settings.copy(appLockEnabled = enabled))
-                    if (enabled) onRequestLockSetup()
+                    if (enabled) {
+                        onSettingsChange(settings.copy(appLockEnabled = true))
+                        onRequestLockSetup()
+                    } else {
+                        onRequestDisableAppLock()
+                    }
                 }
                 if (settings.appLockEnabled) {
-                    TextButton(onClick = onRequestLockNow) {
-                        Text("立即锁定")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onRequestChangePassword) {
+                            Text("修改主密码")
+                        }
+                        TextButton(onClick = onRequestLockNow) {
+                            Text("立即锁定")
+                        }
                     }
                 }
                 SecuritySettingRow("启用生物解锁", settings.biometricUnlockEnabled) {
