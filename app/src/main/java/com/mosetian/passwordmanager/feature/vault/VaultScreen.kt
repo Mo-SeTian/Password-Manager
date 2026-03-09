@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -144,7 +145,15 @@ fun VaultScreen(
     var securitySettings by remember(initialSecuritySettings) { mutableStateOf(initialSecuritySettings) }
     var securityPanelVisible by remember { mutableStateOf(false) }
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
-    val layoutDensity = remember(uiScale) { layoutDensityOf(uiScale) }
+    val configuration = LocalConfiguration.current
+    val autoLayoutScale = remember(configuration.screenWidthDp) {
+        when {
+            configuration.screenWidthDp <= 360 -> 0.92f
+            configuration.screenWidthDp >= 480 -> 1.08f
+            else -> 1f
+        }
+    }
+    val layoutDensity = remember(uiScale, autoLayoutScale) { layoutDensityOf((uiScale * autoLayoutScale).coerceIn(0.35f, 1.2f)) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
