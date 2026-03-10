@@ -289,7 +289,6 @@ fun VaultScreen(
         searchMode,
         editorForm,
         groupEditorForm,
-        detailPanelState.selectedEntryDetail,
         groups,
         editableGroups,
         visibleEntries
@@ -299,13 +298,15 @@ fun VaultScreen(
             editableGroups = editableGroups,
             visibleEntries = visibleEntries,
             selectedGroup = selectedGroup,
-            selectedEntry = detailPanelState.selectedEntryDetail,
+            selectedEntry = null,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,
             groupEditorForm = groupEditorForm
         )
     }
+
+    val selectedEntry = detailPanelState.selectedEntryDetail
 
     LaunchedEffect(uiState.visibleEntries, detailPanelState.selectedEntryId) {
         val currentId = detailPanelState.selectedEntryId ?: return@LaunchedEffect
@@ -329,6 +330,7 @@ fun VaultScreen(
 
     VaultScreenContent(
         uiState = uiState,
+        selectedEntry = selectedEntry,
         securitySettings = securitySettings,
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
@@ -353,7 +355,7 @@ fun VaultScreen(
             editorForm = EntryEditorForm(groupId = defaultGroup)
         },
         onEditEntry = {
-            uiState.selectedEntry?.let { detail ->
+            selectedEntry?.let { detail ->
                 editorForm = detail.toEditorForm(entryGroupById[detail.id] ?: GroupId.All)
             }
         },
@@ -441,6 +443,7 @@ fun VaultScreen(
 @Composable
 private fun VaultScreenContent(
     uiState: VaultUiState,
+    selectedEntry: EntryDetailUiModel?,
     securitySettings: SecuritySettings,
     securityPanelVisible: Boolean,
     uiScale: Float,
@@ -514,7 +517,7 @@ private fun VaultScreenContent(
             }
 
             AnimatedVisibility(
-                visible = detailLoading || uiState.selectedEntry != null,
+                visible = detailLoading || selectedEntry != null,
                 enter = fadeIn() + scaleIn(initialScale = 0.96f),
                 exit = fadeOut() + scaleOut(targetScale = 0.96f)
             ) {
@@ -543,9 +546,9 @@ private fun VaultScreenContent(
                             }
                         }
                     }
-                    uiState.selectedEntry != null -> {
+                    selectedEntry != null -> {
                         EntryDetailOverlay(
-                            entry = uiState.selectedEntry,
+                            entry = selectedEntry,
                             onDismiss = onDismissDetail,
                             onEdit = onEditEntry,
                             onCopy = onCopyField,
