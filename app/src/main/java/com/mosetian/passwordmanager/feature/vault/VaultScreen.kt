@@ -273,26 +273,37 @@ fun VaultScreen(
         entries.associate { it.id to it.groupId }
     }
 
+    val groups = remember(entries, customGroups) {
+        VaultStateFactory.buildGroups(customGroups, entries)
+    }
+    val editableGroups = remember(groups) {
+        groups.filter { it.id !is GroupId.Favorites && it.id !is GroupId.Recent && it.id !is GroupId.Weak }
+    }
+    val visibleEntries = remember(entries, selectedGroup, searchQuery) {
+        VaultStateFactory.filterEntries(selectedGroup, searchQuery, entries)
+    }
+
     val uiState = remember(
         selectedGroup,
-        detailPanelState.selectedEntryId,
         searchQuery,
         searchMode,
         editorForm,
         groupEditorForm,
-        entries,
         detailPanelState.selectedEntryDetail,
-        customGroups
+        groups,
+        editableGroups,
+        visibleEntries
     ) {
-        VaultStateFactory.buildState(
+        VaultUiState(
+            groups = groups,
+            editableGroups = editableGroups,
+            visibleEntries = visibleEntries,
             selectedGroup = selectedGroup,
             selectedEntry = detailPanelState.selectedEntryDetail,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,
-            groupEditorForm = groupEditorForm,
-            entries = entries,
-            customGroups = customGroups
+            groupEditorForm = groupEditorForm
         )
     }
 

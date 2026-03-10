@@ -183,6 +183,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 已开始第十三轮详情状态内聚：将 selectedEntryId / selectedEntryDetail / detailLoading 向局部状态对象收口
 - 已开始第十四轮详情回填收口：统一缓存写入与详情面板回填入口，减少多处手动同步
 - 已开始第十五轮读库线程优化：列表/分组/详情读取切到 IO 线程，降低主线程阻塞
+- 已开始第十六轮 120Hz 掉帧优化：拆分列表状态计算，避免详情变动触发全列表重算
 - 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
 - 正在收口 debug / release 双分支策略
 - 正在把远端 release 打包链路调整为更稳定的发布流程
