@@ -95,7 +95,9 @@ import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 import com.mosetian.passwordmanager.feature.vault.model.toEditorForm
 import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class VaultLayoutDensity(
     val groupsPaneWidth: Dp,
@@ -176,8 +178,13 @@ fun VaultScreen(
 
     suspend fun reloadVaultData() {
         loading = true
-        entries = repository.getEntries()
-        customGroups = repository.getCustomGroups()
+        val (loadedEntries, loadedGroups) = withContext(Dispatchers.IO) {
+            val loadedEntries = repository.getEntries()
+            val loadedGroups = repository.getCustomGroups()
+            loadedEntries to loadedGroups
+        }
+        entries = loadedEntries
+        customGroups = loadedGroups
         loading = false
     }
 
@@ -245,7 +252,7 @@ fun VaultScreen(
             return
         }
         detailPanelState = detailPanelState.copy(detailLoading = true)
-        val detail = repository.getEntryDetail(entryId)
+        val detail = withContext(Dispatchers.IO) { repository.getEntryDetail(entryId) }
         if (detailPanelState.selectedEntryId != entryId) return
         if (detail != null) {
             cacheAndSelectEntry(detail)
