@@ -206,6 +206,15 @@ fun VaultScreen(
         detailCache = detailCache + (detail.id to detail)
     }
 
+    fun cacheAndSelectEntry(detail: EntryDetailUiModel) {
+        cacheEntryDetail(detail)
+        detailPanelState = detailPanelState.copy(
+            selectedEntryId = detail.id,
+            selectedEntryDetail = detail,
+            detailLoading = false
+        )
+    }
+
     fun clearSelectedEntryState() {
         detailPanelState = EntryDetailPanelState()
     }
@@ -238,8 +247,11 @@ fun VaultScreen(
         detailPanelState = detailPanelState.copy(detailLoading = true)
         val detail = repository.getEntryDetail(entryId)
         if (detailPanelState.selectedEntryId != entryId) return
-        detailPanelState = detailPanelState.copy(selectedEntryDetail = detail, detailLoading = false)
-        if (detail != null) cacheEntryDetail(detail)
+        if (detail != null) {
+            cacheAndSelectEntry(detail)
+        } else {
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = null, detailLoading = false)
+        }
     }
 
     LaunchedEffect(repository) {
@@ -383,8 +395,7 @@ fun VaultScreen(
                 repository.upsertEntry(entry)
                 repository.upsertEntryDetail(detail)
                 upsertLocalEntry(entry)
-                cacheEntryDetail(detail)
-                selectEntry(entryId, detail)
+                cacheAndSelectEntry(detail)
                 editorForm = null
                 snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
             }
