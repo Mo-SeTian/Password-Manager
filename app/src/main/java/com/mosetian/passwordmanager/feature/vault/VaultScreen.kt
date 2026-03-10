@@ -202,6 +202,12 @@ fun VaultScreen(
         detailCache = detailCache + (detail.id to detail)
     }
 
+    fun clearSelectedEntryState() {
+        selectedEntryId = null
+        selectedEntryDetail = null
+        detailLoading = false
+    }
+
     suspend fun reloadSelectedEntryDetail() {
         val entryId = selectedEntryId
         if (entryId == null) {
@@ -264,14 +270,12 @@ fun VaultScreen(
     LaunchedEffect(uiState.visibleEntries, selectedEntryId) {
         val currentId = selectedEntryId ?: return@LaunchedEffect
         if (uiState.visibleEntries.none { it.id == currentId }) {
-            selectedEntryId = null
-            selectedEntryDetail = null
-            detailLoading = false
+            clearSelectedEntryState()
         }
     }
 
     BackHandler(enabled = selectedEntryId != null) {
-        selectedEntryId = null
+        clearSelectedEntryState()
     }
     BackHandler(enabled = editorForm != null) {
         editorForm = null
@@ -328,7 +332,7 @@ fun VaultScreen(
             uiScale = it
             onUiScaleChange(it)
         },
-        onDismissDetail = { selectedEntryId = null },
+        onDismissDetail = { clearSelectedEntryState() },
         onDismissEditor = { editorForm = null },
         onRequestLockSetup = onRequestLockSetup,
         onRequestLockNow = onRequestLockNow,

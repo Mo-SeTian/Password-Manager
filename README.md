@@ -178,6 +178,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 已开始第八轮编辑装配优化：统一详情到编辑表单的映射逻辑，减少重复手写转换
 - 已开始第九轮详情来源收口：预构建 entryId 到 groupId 映射，减少编辑入口重复扫描列表
 - 已开始第十轮详情请求防串改：快速切换条目时忽略过期详情结果，减少错误覆盖与 loading 抖动
+- 已开始第十一轮详情关闭收口：统一详情关闭时的状态清理，减少旧态残留风险
 - 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
 - 正在收口 debug / release 双分支策略
 - 正在把远端 release 打包链路调整为更稳定的发布流程
