@@ -229,6 +229,10 @@ fun VaultScreen(
         reloadSelectedEntryDetail()
     }
 
+    val entryGroupById = remember(entries) {
+        entries.associate { it.id to it.groupId }
+    }
+
     val uiState = remember(
         selectedGroup,
         selectedEntryId,
@@ -305,8 +309,7 @@ fun VaultScreen(
         },
         onEditEntry = {
             uiState.selectedEntry?.let { detail ->
-                val entry = entries.firstOrNull { it.id == detail.id }
-                editorForm = detail.toEditorForm(entry?.groupId ?: GroupId.All)
+                editorForm = detail.toEditorForm(entryGroupById[detail.id] ?: GroupId.All)
             }
         },
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
