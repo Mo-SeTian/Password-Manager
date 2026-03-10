@@ -161,7 +161,6 @@ object VaultMockData {
 
     fun createForm(detail: EntryDetailUiModel?): EntryEditorForm {
         if (detail == null) return EntryEditorForm()
-        val firstCustom = detail.customFields.firstOrNull()
         return EntryEditorForm(
             id = detail.id,
             name = detail.name,
@@ -173,4 +172,18 @@ object VaultMockData {
             customFields = detail.customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
         )
     }
+}
+
+fun EntryDetailUiModel.toEditorForm(groupId: GroupId): EntryEditorForm {
+    return EntryEditorForm(
+        id = id,
+        name = name,
+        iconEmoji = iconEmoji,
+        groupId = groupId,
+        username = username,
+        password = password,
+        website = website.orEmpty(),
+        note = note.orEmpty(),
+        customFields = customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
+    )
 }

@@ -12,6 +12,8 @@ class InMemoryVaultRepository : VaultRepository {
 
     override suspend fun getEntries(): List<EntryUiModel> = entries.toList()
 
+    override suspend fun getEntryDetail(id: String): EntryDetailUiModel? = entryDetails.firstOrNull { it.id == id }
+
     override suspend fun getEntryDetails(): List<EntryDetailUiModel> = entryDetails.toList()
 
     override suspend fun getCustomGroups(): List<GroupUiModel> = customGroups.toList()
