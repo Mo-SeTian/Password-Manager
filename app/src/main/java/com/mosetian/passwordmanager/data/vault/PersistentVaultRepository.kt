@@ -14,7 +14,6 @@ import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
-import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -24,8 +23,8 @@ class PersistentVaultRepository(
     private val customGroupDao: CustomGroupDao,
     private val cryptoManager: VaultCryptoManager
 ) : VaultRepository {
-    override fun getEntries(): List<EntryUiModel> = runBlocking {
-        entryDao.getAll().map {
+    override suspend fun getEntries(): List<EntryUiModel> {
+        return entryDao.getAll().map {
             EntryUiModel(
                 id = it.id,
                 name = cryptoManager.decrypt(it.name),
@@ -44,23 +43,16 @@ class PersistentVaultRepository(
         }
     }
 
-    override fun getEntryDetails(): List<EntryDetailUiModel> = runBlocking {
-        entryDetailDao.getAll().map {
-            EntryDetailUiModel(
-                id = it.id,
-                name = cryptoManager.decrypt(it.name),
-                iconEmoji = cryptoManager.decrypt(it.iconEmoji),
-                username = cryptoManager.decrypt(it.username),
-                password = cryptoManager.decrypt(it.password),
-                website = it.website?.let(cryptoManager::decrypt),
-                note = it.note?.let(cryptoManager::decrypt),
-                customFields = parseCustomFields(it.customFieldsJson)
-            )
-        }
+    override suspend fun getEntryDetail(id: String): EntryDetailUiModel? {
+        return entryDetailDao.getById(id)?.toUiModel()
     }
 
-    override fun getCustomGroups(): List<GroupUiModel> = runBlocking {
-        customGroupDao.getAll().map {
+    override suspend fun getEntryDetails(): List<EntryDetailUiModel> {
+        return entryDetailDao.getAll().map { it.toUiModel() }
+    }
+
+    override suspend fun getCustomGroups(): List<GroupUiModel> {
+        return customGroupDao.getAll().map {
             GroupUiModel(
                 id = GroupId.Custom(it.key),
                 name = cryptoManager.decrypt(it.name),
@@ -71,7 +63,7 @@ class PersistentVaultRepository(
         }
     }
 
-    override fun upsertEntry(entry: EntryUiModel) = runBlocking {
+    override suspend fun upsertEntry(entry: EntryUiModel) {
         entryDao.upsert(
             EntryEntity(
                 id = entry.id,
@@ -91,7 +83,7 @@ class PersistentVaultRepository(
         )
     }
 
-    override fun upsertEntryDetail(detail: EntryDetailUiModel) = runBlocking {
+    override suspend fun upsertEntryDetail(detail: EntryDetailUiModel) {
         entryDetailDao.upsert(
             EntryDetailEntity(
                 id = detail.id,
@@ -106,8 +98,8 @@ class PersistentVaultRepository(
         )
     }
 
-    override fun addGroup(group: GroupUiModel) = runBlocking {
-        val key = (group.id as? GroupId.Custom)?.value ?: return@runBlocking
+    override suspend fun addGroup(group: GroupUiModel) {
+        val key = (group.id as? GroupId.Custom)?.value ?: return
         customGroupDao.insert(
             CustomGroupEntity(
                 key = key,
@@ -116,8 +108,32 @@ class PersistentVaultRepository(
         )
     }
 
-    override fun migratePlaintextDataIfNeeded() = runBlocking {
-        entryDao.getAll().forEach { entry ->
+    override suspend fun migratePlaintextDataIfNeeded() {
+        val entries = entryDao.getAll()
+        val details = entryDetailDao.getAll()
+        val groups = customGroupDao.getAll()
+
+        val entriesNeedMigration = entries.any {
+            !cryptoManager.isEncrypted(it.name) ||
+                !cryptoManager.isEncrypted(it.iconEmoji) ||
+                (it.groupKey !in setOf("all", "favorites", "recent", "weak") && !cryptoManager.isEncrypted(it.groupKey))
+        }
+        val detailsNeedMigration = details.any {
+            !cryptoManager.isEncrypted(it.name) ||
+                !cryptoManager.isEncrypted(it.iconEmoji) ||
+                !cryptoManager.isEncrypted(it.username) ||
+                !cryptoManager.isEncrypted(it.password) ||
+                (it.website != null && !cryptoManager.isEncrypted(it.website)) ||
+                (it.note != null && !cryptoManager.isEncrypted(it.note)) ||
+                parseCustomFields(it.customFieldsJson).any { field ->
+                    !cryptoManager.isEncrypted(field.label) || !cryptoManager.isEncrypted(field.value)
+                }
+        }
+        val groupsNeedMigration = groups.any { !cryptoManager.isEncrypted(it.name) }
+
+        if (!entriesNeedMigration && !detailsNeedMigration && !groupsNeedMigration) return
+
+        entries.forEach { entry ->
             val encryptedGroupKey = when (entry.groupKey) {
                 "all", "favorites", "recent", "weak" -> entry.groupKey
                 else -> cryptoManager.encrypt(cryptoManager.decrypt(entry.groupKey))
@@ -131,7 +147,7 @@ class PersistentVaultRepository(
             )
         }
 
-        entryDetailDao.getAll().forEach { detail ->
+        details.forEach { detail ->
             entryDetailDao.upsert(
                 detail.copy(
                     name = cryptoManager.encrypt(cryptoManager.decrypt(detail.name)),
@@ -145,11 +161,24 @@ class PersistentVaultRepository(
             )
         }
 
-        customGroupDao.getAll().forEach { group ->
+        groups.forEach { group ->
             customGroupDao.insert(
                 group.copy(name = cryptoManager.encrypt(cryptoManager.decrypt(group.name)))
             )
         }
+    }
+
+    private fun EntryDetailEntity.toUiModel(): EntryDetailUiModel {
+        return EntryDetailUiModel(
+            id = id,
+            name = cryptoManager.decrypt(name),
+            iconEmoji = cryptoManager.decrypt(iconEmoji),
+            username = cryptoManager.decrypt(username),
+            password = cryptoManager.decrypt(password),
+            website = website?.let(cryptoManager::decrypt),
+            note = note?.let(cryptoManager::decrypt),
+            customFields = parseCustomFields(customFieldsJson)
+        )
     }
 
     private fun stringifyCustomFields(fields: List<CustomFieldUiModel>): String {
@@ -174,10 +203,12 @@ class PersistentVaultRepository(
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
+                    val rawLabel = item.optString("label")
+                    val rawValue = item.optString("value")
                     add(
                         CustomFieldUiModel(
-                            label = cryptoManager.decrypt(item.optString("label")),
-                            value = cryptoManager.decrypt(item.optString("value")),
+                            label = cryptoManager.decrypt(rawLabel),
+                            value = cryptoManager.decrypt(rawValue),
                             isSecret = item.optBoolean("isSecret", false),
                             copyable = item.optBoolean("copyable", true)
                         )

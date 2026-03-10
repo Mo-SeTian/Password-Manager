@@ -64,6 +64,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,9 +92,12 @@ import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupEditorForm
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
+import com.mosetian.passwordmanager.feature.vault.model.toEditorForm
 import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class VaultLayoutDensity(
     val groupsPaneWidth: Dp,
@@ -107,6 +111,12 @@ private data class VaultLayoutDensity(
     val listItemSpacing: Dp,
     val groupItemVertical: Dp,
     val groupItemSpacing: Dp
+)
+
+private data class EntryDetailPanelState(
+    val selectedEntryId: String? = null,
+    val selectedEntryDetail: EntryDetailUiModel? = null,
+    val detailLoading: Boolean = false
 )
 
 private fun layoutDensityOf(value: Float): VaultLayoutDensity {
@@ -140,7 +150,7 @@ fun VaultScreen(
     onRequestDisableAppLock: () -> Unit = {}
 ) {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
-    var selectedEntryId by remember { mutableStateOf<String?>(null) }
+    var detailPanelState by remember { mutableStateOf(EntryDetailPanelState()) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
     var groupEditorForm by remember { mutableStateOf<GroupEditorForm?>(null) }
     var searchQuery by remember { mutableStateOf("") }
@@ -161,43 +171,140 @@ fun VaultScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
+    var detailCache by remember { mutableStateOf<Map<String, EntryDetailUiModel>>(emptyMap()) }
+    var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
 
-    val entries = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getEntries()
+    suspend fun reloadVaultData() {
+        loading = true
+        val (loadedEntries, loadedGroups) = withContext(Dispatchers.IO) {
+            val loadedEntries = repository.getEntries()
+            val loadedGroups = repository.getCustomGroups()
+            loadedEntries to loadedGroups
+        }
+        entries = loadedEntries
+        customGroups = loadedGroups
+        loading = false
     }
-    val entryDetails = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getEntryDetails()
+
+    fun upsertLocalEntry(entry: EntryUiModel) {
+        entries = buildList {
+            var replaced = false
+            entries.forEach { current ->
+                if (current.id == entry.id) {
+                    add(entry)
+                    replaced = true
+                } else {
+                    add(current)
+                }
+            }
+            if (!replaced) add(0, entry)
+        }
     }
-    val customGroups = remember(selectedGroup, selectedEntryId, editorForm, groupEditorForm, searchQuery, searchMode) {
-        repository.getCustomGroups()
+
+    fun addLocalGroup(group: GroupUiModel) {
+        if (customGroups.none { it.id == group.id }) {
+            customGroups = customGroups + group
+        }
+    }
+
+    fun cacheEntryDetail(detail: EntryDetailUiModel) {
+        detailCache = detailCache + (detail.id to detail)
+    }
+
+    fun cacheAndSelectEntry(detail: EntryDetailUiModel) {
+        cacheEntryDetail(detail)
+        detailPanelState = detailPanelState.copy(
+            selectedEntryId = detail.id,
+            selectedEntryDetail = detail,
+            detailLoading = false
+        )
+    }
+
+    fun clearSelectedEntryState() {
+        detailPanelState = EntryDetailPanelState()
+    }
+
+    fun selectEntry(entryId: String, detail: EntryDetailUiModel? = detailCache[entryId]) {
+        detailPanelState = detailPanelState.copy(selectedEntryId = entryId)
+        if (detail != null) {
+            detailPanelState = detailPanelState.copy(
+                selectedEntryId = entryId,
+                selectedEntryDetail = detail,
+                detailLoading = false
+            )
+        }
+    }
+
+    suspend fun reloadSelectedEntryDetail() {
+        val entryId = detailPanelState.selectedEntryId
+        if (entryId == null) {
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = null, detailLoading = false)
+            return
+        }
+        if (detailPanelState.selectedEntryDetail?.id == entryId) {
+            detailPanelState = detailPanelState.copy(detailLoading = false)
+            return
+        }
+        detailCache[entryId]?.let { cached ->
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = cached, detailLoading = false)
+            return
+        }
+        detailPanelState = detailPanelState.copy(detailLoading = true)
+        val detail = withContext(Dispatchers.IO) { repository.getEntryDetail(entryId) }
+        if (detailPanelState.selectedEntryId != entryId) return
+        if (detail != null) {
+            cacheAndSelectEntry(detail)
+        } else {
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = null, detailLoading = false)
+        }
+    }
+
+    LaunchedEffect(repository) {
+        reloadVaultData()
+    }
+
+    LaunchedEffect(repository, detailPanelState.selectedEntryId) {
+        reloadSelectedEntryDetail()
+    }
+
+    val entryGroupById = remember(entries) {
+        entries.associate { it.id to it.groupId }
     }
 
     val uiState = remember(
         selectedGroup,
-        selectedEntryId,
+        detailPanelState.selectedEntryId,
         searchQuery,
         searchMode,
         editorForm,
         groupEditorForm,
         entries,
-        entryDetails,
+        detailPanelState.selectedEntryDetail,
         customGroups
     ) {
         VaultStateFactory.buildState(
             selectedGroup = selectedGroup,
-            selectedEntryId = selectedEntryId,
+            selectedEntry = detailPanelState.selectedEntryDetail,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,
             groupEditorForm = groupEditorForm,
             entries = entries,
-            entryDetails = entryDetails,
             customGroups = customGroups
         )
     }
 
-    BackHandler(enabled = selectedEntryId != null) {
-        selectedEntryId = null
+    LaunchedEffect(uiState.visibleEntries, detailPanelState.selectedEntryId) {
+        val currentId = detailPanelState.selectedEntryId ?: return@LaunchedEffect
+        if (uiState.visibleEntries.none { it.id == currentId }) {
+            clearSelectedEntryState()
+        }
+    }
+
+    BackHandler(enabled = detailPanelState.selectedEntryId != null) {
+        clearSelectedEntryState()
     }
     BackHandler(enabled = editorForm != null) {
         editorForm = null
@@ -214,36 +321,29 @@ fun VaultScreen(
         securitySettings = securitySettings,
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
+        loading = loading,
+        detailLoading = detailPanelState.detailLoading,
         layoutDensity = layoutDensity,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
-            selectedEntryId = null
         },
         onToggleSearch = {
             searchMode = !searchMode
             if (!searchMode) searchQuery = ""
         },
         onSearchQueryChange = { searchQuery = it },
-        onEntryClick = { selectedEntryId = it },
+        onEntryClick = {
+            if (detailPanelState.selectedEntryId == it && detailPanelState.selectedEntryDetail != null) return@VaultScreenContent
+            selectEntry(it)
+        },
         onAddEntry = {
             val defaultGroup = if (selectedGroup is GroupId.Custom || selectedGroup == GroupId.All) selectedGroup else GroupId.All
             editorForm = EntryEditorForm(groupId = defaultGroup)
         },
         onEditEntry = {
             uiState.selectedEntry?.let { detail ->
-                val entry = entries.firstOrNull { it.id == detail.id }
-                editorForm = EntryEditorForm(
-                    id = detail.id,
-                    name = detail.name,
-                    iconEmoji = detail.iconEmoji,
-                    groupId = entry?.groupId ?: GroupId.All,
-                    username = detail.username,
-                    password = detail.password,
-                    website = detail.website.orEmpty(),
-                    note = detail.note.orEmpty(),
-                    customFields = detail.customFields.ifEmpty { listOf(CustomFieldUiModel(label = "", value = "")) }
-                )
+                editorForm = detail.toEditorForm(entryGroupById[detail.id] ?: GroupId.All)
             }
         },
         onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
@@ -257,7 +357,7 @@ fun VaultScreen(
             uiScale = it
             onUiScaleChange(it)
         },
-        onDismissDetail = { selectedEntryId = null },
+        onDismissDetail = { clearSelectedEntryState() },
         onDismissEditor = { editorForm = null },
         onRequestLockSetup = onRequestLockSetup,
         onRequestLockNow = onRequestLockNow,
@@ -275,48 +375,54 @@ fun VaultScreen(
             }
         },
         onSaveEntry = { form ->
-            val targetGroup = form.groupId
-            val entryId = form.id?.takeIf { it.isNotBlank() } ?: (repository.getEntries().size + 1).toString()
-            val entry = EntryUiModel(
-                id = entryId,
-                name = form.name.ifBlank { "未命名凭据" },
-                iconEmoji = form.iconEmoji.ifBlank { "🔐" },
-                groupId = targetGroup,
-                isFavorite = targetGroup == GroupId.Favorites,
-                isRecent = true,
-                isWeak = form.password.length in 1..6
-            )
-            val detail = EntryDetailUiModel(
-                id = entryId,
-                name = entry.name,
-                iconEmoji = entry.iconEmoji,
-                username = form.username,
-                password = form.password,
-                website = form.website.ifBlank { null },
-                note = form.note.ifBlank { null },
-                customFields = form.customFields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.map {
-                    it.copy(label = it.label.ifBlank { "自定义字段" })
-                }
-            )
-            repository.upsertEntry(entry)
-            repository.upsertEntryDetail(detail)
-            selectedEntryId = entryId
-            editorForm = null
-            scope.launch { snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据") }
+            scope.launch {
+                val targetGroup = form.groupId
+                val entryId = form.id?.takeIf { it.isNotBlank() } ?: ((entries.maxOfOrNull { it.id.toIntOrNull() ?: 0 } ?: 0) + 1).toString()
+                val entry = EntryUiModel(
+                    id = entryId,
+                    name = form.name.ifBlank { "未命名凭据" },
+                    iconEmoji = form.iconEmoji.ifBlank { "🔐" },
+                    groupId = targetGroup,
+                    isFavorite = targetGroup == GroupId.Favorites,
+                    isRecent = true,
+                    isWeak = form.password.length in 1..6
+                )
+                val detail = EntryDetailUiModel(
+                    id = entryId,
+                    name = entry.name,
+                    iconEmoji = entry.iconEmoji,
+                    username = form.username,
+                    password = form.password,
+                    website = form.website.ifBlank { null },
+                    note = form.note.ifBlank { null },
+                    customFields = form.customFields.filter { it.label.isNotBlank() || it.value.isNotBlank() }.map {
+                        it.copy(label = it.label.ifBlank { "自定义字段" })
+                    }
+                )
+                repository.upsertEntry(entry)
+                repository.upsertEntryDetail(detail)
+                upsertLocalEntry(entry)
+                cacheAndSelectEntry(detail)
+                editorForm = null
+                snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
+            }
         },
         onSaveGroup = { form ->
-            val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
-            val newGroup = GroupUiModel(
-                id = GroupId.Custom(key),
-                name = form.name.ifBlank { "新分组" },
-                count = 0,
-                icon = Icons.Rounded.FolderOpen,
-                isBuiltIn = false
-            )
-            repository.addGroup(newGroup)
-            selectedGroup = newGroup.id
-            groupEditorForm = null
-            scope.launch { snackbarHostState.showSnackbar("已创建分组：${newGroup.name}") }
+            scope.launch {
+                val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
+                val newGroup = GroupUiModel(
+                    id = GroupId.Custom(key),
+                    name = form.name.ifBlank { "新分组" },
+                    count = 0,
+                    icon = Icons.Rounded.FolderOpen,
+                    isBuiltIn = false
+                )
+                repository.addGroup(newGroup)
+                addLocalGroup(newGroup)
+                selectedGroup = newGroup.id
+                groupEditorForm = null
+                snackbarHostState.showSnackbar("已创建分组：${newGroup.name}")
+            }
         }
     )
 }
@@ -327,6 +433,8 @@ private fun VaultScreenContent(
     securitySettings: SecuritySettings,
     securityPanelVisible: Boolean,
     uiScale: Float,
+    loading: Boolean,
+    detailLoading: Boolean,
     layoutDensity: VaultLayoutDensity,
     snackbarHostState: SnackbarHostState,
     onRequestLockSetup: () -> Unit,
@@ -384,6 +492,7 @@ private fun VaultScreenContent(
                     searchQuery = uiState.searchQuery,
                     searchMode = uiState.searchMode,
                     selectedGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroup },
+                    loading = loading,
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
@@ -394,18 +503,44 @@ private fun VaultScreenContent(
             }
 
             AnimatedVisibility(
-                visible = uiState.selectedEntry != null,
+                visible = detailLoading || uiState.selectedEntry != null,
                 enter = fadeIn() + scaleIn(initialScale = 0.96f),
                 exit = fadeOut() + scaleOut(targetScale = 0.96f)
             ) {
-                uiState.selectedEntry?.let { entry ->
-                    EntryDetailOverlay(
-                        entry = entry,
-                        onDismiss = onDismissDetail,
-                        onEdit = onEditEntry,
-                        onCopy = onCopyField,
-                        obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
-                    )
+                when {
+                    detailLoading -> {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.18f)),
+                            color = Color.Transparent
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 8.dp,
+                                    shadowElevation = 24.dp
+                                ) {
+                                    Text(
+                                        text = "正在读取详情…",
+                                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    uiState.selectedEntry != null -> {
+                        EntryDetailOverlay(
+                            entry = uiState.selectedEntry,
+                            onDismiss = onDismissDetail,
+                            onEdit = onEditEntry,
+                            onCopy = onCopyField,
+                            obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
+                        )
+                    }
                 }
             }
 
@@ -541,6 +676,7 @@ private fun RightEntriesList(
     searchQuery: String,
     searchMode: Boolean,
     selectedGroup: GroupUiModel?,
+    loading: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
@@ -566,7 +702,11 @@ private fun RightEntriesList(
                 onAddClick = onAddClick,
                 layoutDensity = layoutDensity
             )
-            if (entries.isEmpty()) {
+            if (loading) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
+                    Text("正在加载密码库…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (entries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
                     Surface(
                         shape = RoundedCornerShape(28.dp),

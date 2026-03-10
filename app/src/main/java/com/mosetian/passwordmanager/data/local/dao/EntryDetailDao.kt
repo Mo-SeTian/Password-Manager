@@ -11,6 +11,9 @@ interface EntryDetailDao {
     @Query("SELECT * FROM entry_details")
     suspend fun getAll(): List<EntryDetailEntity>
 
+    @Query("SELECT * FROM entry_details WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): EntryDetailEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(detail: EntryDetailEntity)
 }

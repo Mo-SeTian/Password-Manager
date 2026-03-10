@@ -30,7 +30,9 @@ import com.mosetian.passwordmanager.feature.security.DisableAppLockDialog
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import com.mosetian.passwordmanager.feature.vault.VaultScreen
 import com.mosetian.passwordmanager.ui.theme.PasswordManagerTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PasswordManagerApp() {
@@ -43,6 +45,7 @@ fun PasswordManagerApp() {
     val appLockState by preferencesStore.appLockState.collectAsState(initial = AppLockState())
     val securitySettings by preferencesStore.securitySettings.collectAsState(initial = SecuritySettings())
     val uiScale by preferencesStore.uiScale.collectAsState(initial = 0.48f)
+    val migrationCompleted by preferencesStore.plaintextMigrationCompleted.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
     var unlocked by remember(appLockState.enabled, appLockState.passwordHash, appLockState.passwordSalt) {
         mutableStateOf(!appLockState.enabled || appLockState.passwordHash.isBlank())
@@ -51,13 +54,16 @@ fun PasswordManagerApp() {
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showDisableAppLockDialog by remember { mutableStateOf(false) }
     var biometricAvailable by remember { mutableStateOf(false) }
-    val repository = remember(context, unlocked) {
+    val repository = remember(context) {
         VaultRepositoryProvider.createPersistent(context)
     }
 
-    LaunchedEffect(repository, unlocked) {
-        if (unlocked) {
-            repository.migratePlaintextDataIfNeeded()
+    LaunchedEffect(repository, unlocked, migrationCompleted) {
+        if (unlocked && !migrationCompleted) {
+            withContext(Dispatchers.IO) {
+                repository.migratePlaintextDataIfNeeded()
+            }
+            preferencesStore.setPlaintextMigrationCompleted(true)
         }
     }
 
