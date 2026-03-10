@@ -209,6 +209,10 @@ fun VaultScreen(
             detailLoading = false
             return
         }
+        if (selectedEntryDetail?.id == entryId) {
+            detailLoading = false
+            return
+        }
         detailCache[entryId]?.let { cached ->
             selectedEntryDetail = cached
             detailLoading = false
@@ -216,6 +220,7 @@ fun VaultScreen(
         }
         detailLoading = true
         val detail = repository.getEntryDetail(entryId)
+        if (selectedEntryId != entryId) return
         selectedEntryDetail = detail
         if (detail != null) cacheEntryDetail(detail)
         detailLoading = false
