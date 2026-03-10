@@ -180,6 +180,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 已开始第十轮详情请求防串改：快速切换条目时忽略过期详情结果，减少错误覆盖与 loading 抖动
 - 已开始第十一轮详情关闭收口：统一详情关闭时的状态清理，减少旧态残留风险
 - 已开始第十二轮详情选中收口：统一列表点击与保存后的选中入口，减少状态分散写入
+- 已开始第十三轮详情状态内聚：将 selectedEntryId / selectedEntryDetail / detailLoading 向局部状态对象收口
 - 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包
 - 正在收口 debug / release 双分支策略
 - 正在把远端 release 打包链路调整为更稳定的发布流程

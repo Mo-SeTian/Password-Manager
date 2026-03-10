@@ -111,6 +111,12 @@ private data class VaultLayoutDensity(
     val groupItemSpacing: Dp
 )
 
+private data class EntryDetailPanelState(
+    val selectedEntryId: String? = null,
+    val selectedEntryDetail: EntryDetailUiModel? = null,
+    val detailLoading: Boolean = false
+)
+
 private fun layoutDensityOf(value: Float): VaultLayoutDensity {
     val safeScale = value.coerceAtLeast(0.35f)
     val factor = 1f + (safeScale - 1f) * 0.85f
@@ -142,7 +148,7 @@ fun VaultScreen(
     onRequestDisableAppLock: () -> Unit = {}
 ) {
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
-    var selectedEntryId by remember { mutableStateOf<String?>(null) }
+    var detailPanelState by remember { mutableStateOf(EntryDetailPanelState()) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
     var groupEditorForm by remember { mutableStateOf<GroupEditorForm?>(null) }
     var searchQuery by remember { mutableStateOf("") }
@@ -164,9 +170,7 @@ fun VaultScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
-    var selectedEntryDetail by remember { mutableStateOf<EntryDetailUiModel?>(null) }
     var detailCache by remember { mutableStateOf<Map<String, EntryDetailUiModel>>(emptyMap()) }
-    var detailLoading by remember { mutableStateOf(false) }
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
@@ -203,48 +207,46 @@ fun VaultScreen(
     }
 
     fun clearSelectedEntryState() {
-        selectedEntryId = null
-        selectedEntryDetail = null
-        detailLoading = false
+        detailPanelState = EntryDetailPanelState()
     }
 
     fun selectEntry(entryId: String, detail: EntryDetailUiModel? = detailCache[entryId]) {
-        selectedEntryId = entryId
+        detailPanelState = detailPanelState.copy(selectedEntryId = entryId)
         if (detail != null) {
-            selectedEntryDetail = detail
-            detailLoading = false
+            detailPanelState = detailPanelState.copy(
+                selectedEntryId = entryId,
+                selectedEntryDetail = detail,
+                detailLoading = false
+            )
         }
     }
 
     suspend fun reloadSelectedEntryDetail() {
-        val entryId = selectedEntryId
+        val entryId = detailPanelState.selectedEntryId
         if (entryId == null) {
-            selectedEntryDetail = null
-            detailLoading = false
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = null, detailLoading = false)
             return
         }
-        if (selectedEntryDetail?.id == entryId) {
-            detailLoading = false
+        if (detailPanelState.selectedEntryDetail?.id == entryId) {
+            detailPanelState = detailPanelState.copy(detailLoading = false)
             return
         }
         detailCache[entryId]?.let { cached ->
-            selectedEntryDetail = cached
-            detailLoading = false
+            detailPanelState = detailPanelState.copy(selectedEntryDetail = cached, detailLoading = false)
             return
         }
-        detailLoading = true
+        detailPanelState = detailPanelState.copy(detailLoading = true)
         val detail = repository.getEntryDetail(entryId)
-        if (selectedEntryId != entryId) return
-        selectedEntryDetail = detail
+        if (detailPanelState.selectedEntryId != entryId) return
+        detailPanelState = detailPanelState.copy(selectedEntryDetail = detail, detailLoading = false)
         if (detail != null) cacheEntryDetail(detail)
-        detailLoading = false
     }
 
     LaunchedEffect(repository) {
         reloadVaultData()
     }
 
-    LaunchedEffect(repository, selectedEntryId) {
+    LaunchedEffect(repository, detailPanelState.selectedEntryId) {
         reloadSelectedEntryDetail()
     }
 
@@ -254,18 +256,18 @@ fun VaultScreen(
 
     val uiState = remember(
         selectedGroup,
-        selectedEntryId,
+        detailPanelState.selectedEntryId,
         searchQuery,
         searchMode,
         editorForm,
         groupEditorForm,
         entries,
-        selectedEntryDetail,
+        detailPanelState.selectedEntryDetail,
         customGroups
     ) {
         VaultStateFactory.buildState(
             selectedGroup = selectedGroup,
-            selectedEntry = selectedEntryDetail,
+            selectedEntry = detailPanelState.selectedEntryDetail,
             searchQuery = searchQuery,
             searchMode = searchMode,
             editorForm = editorForm,
@@ -275,14 +277,14 @@ fun VaultScreen(
         )
     }
 
-    LaunchedEffect(uiState.visibleEntries, selectedEntryId) {
-        val currentId = selectedEntryId ?: return@LaunchedEffect
+    LaunchedEffect(uiState.visibleEntries, detailPanelState.selectedEntryId) {
+        val currentId = detailPanelState.selectedEntryId ?: return@LaunchedEffect
         if (uiState.visibleEntries.none { it.id == currentId }) {
             clearSelectedEntryState()
         }
     }
 
-    BackHandler(enabled = selectedEntryId != null) {
+    BackHandler(enabled = detailPanelState.selectedEntryId != null) {
         clearSelectedEntryState()
     }
     BackHandler(enabled = editorForm != null) {
@@ -301,7 +303,7 @@ fun VaultScreen(
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
         loading = loading,
-        detailLoading = detailLoading,
+        detailLoading = detailPanelState.detailLoading,
         layoutDensity = layoutDensity,
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
@@ -313,7 +315,7 @@ fun VaultScreen(
         },
         onSearchQueryChange = { searchQuery = it },
         onEntryClick = {
-            if (selectedEntryId == it && selectedEntryDetail != null) return@VaultScreenContent
+            if (detailPanelState.selectedEntryId == it && detailPanelState.selectedEntryDetail != null) return@VaultScreenContent
             selectEntry(it)
         },
         onAddEntry = {
