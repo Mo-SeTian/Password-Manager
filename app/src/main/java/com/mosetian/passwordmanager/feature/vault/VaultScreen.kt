@@ -208,6 +208,14 @@ fun VaultScreen(
         detailLoading = false
     }
 
+    fun selectEntry(entryId: String, detail: EntryDetailUiModel? = detailCache[entryId]) {
+        selectedEntryId = entryId
+        if (detail != null) {
+            selectedEntryDetail = detail
+            detailLoading = false
+        }
+    }
+
     suspend fun reloadSelectedEntryDetail() {
         val entryId = selectedEntryId
         if (entryId == null) {
@@ -306,11 +314,7 @@ fun VaultScreen(
         onSearchQueryChange = { searchQuery = it },
         onEntryClick = {
             if (selectedEntryId == it && selectedEntryDetail != null) return@VaultScreenContent
-            detailCache[it]?.let { cached ->
-                selectedEntryDetail = cached
-                detailLoading = false
-            }
-            selectedEntryId = it
+            selectEntry(it)
         },
         onAddEntry = {
             val defaultGroup = if (selectedGroup is GroupId.Custom || selectedGroup == GroupId.All) selectedGroup else GroupId.All
@@ -378,9 +382,7 @@ fun VaultScreen(
                 repository.upsertEntryDetail(detail)
                 upsertLocalEntry(entry)
                 cacheEntryDetail(detail)
-                selectedEntryDetail = detail
-                detailLoading = false
-                selectedEntryId = entryId
+                selectEntry(entryId, detail)
                 editorForm = null
                 snackbarHostState.showSnackbar(if (form.id.isNullOrBlank()) "已新增凭据" else "已更新凭据")
             }
