@@ -299,6 +299,8 @@ fun VaultScreen(
         )
     }
 
+    val selectedEntry = detailPanelState.selectedEntryDetail
+
     LaunchedEffect(uiState.visibleEntries, detailPanelState.selectedEntryId) {
         val currentId = detailPanelState.selectedEntryId ?: return@LaunchedEffect
         if (uiState.visibleEntries.none { it.id == currentId }) {
