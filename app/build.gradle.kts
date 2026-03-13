@@ -13,8 +13,8 @@ android {
         applicationId = "com.mosetian.passwordmanager"
         minSdk = 28
         targetSdk = 35
-        versionCode = 17
-        versionName = "2.0.0"
+        versionCode = 18
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -22,13 +22,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("PM_RELEASE_STORE_FILE") ?: "")
+            storePassword = System.getenv("PM_RELEASE_STORE_PASSWORD")
+            keyAlias = System.getenv("PM_RELEASE_KEY_ALIAS")
+            keyPassword = System.getenv("PM_RELEASE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            // 使用正式包名与签名，方便调试与发布一致
+            signingConfig = signingConfigs.getByName("release")
         }
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

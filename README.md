@@ -183,6 +183,10 @@ app/src/main/java/com/mosetian/passwordmanager/
 - 凭据详情页新增删除入口，并提供二次确认
 - 删除后同步更新列表与详情缓存
 
+### v2.1.0
+- 正式发行签名切换，Debug/Release 统一包名与签名
+- 凭据删除能力稳定化与文档更新
+
 ### 当前优化中
 - 正在继续观察启动卡顿优化后的真实体验
 - 正在优化包体积：debug 本地验证 + release 远端 GitHub 打包

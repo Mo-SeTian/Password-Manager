@@ -37,6 +37,13 @@ jobs:
       - name: 授予 gradlew 执行权限
         run: chmod +x ./gradlew
 
+      - name: 准备签名文件
+        env:
+          PM_RELEASE_KEYSTORE_B64: ${{ secrets.PM_RELEASE_KEYSTORE_B64 }}
+        run: |
+          mkdir -p app/keystore
+          echo "$PM_RELEASE_KEYSTORE_B64" | base64 -d > app/keystore/release.jks
+
       - name: 选择构建类型
         id: build_type
         run: |
@@ -51,6 +58,11 @@ jobs:
           fi
 
       - name: 构建 APK
+        env:
+          PM_RELEASE_STORE_FILE: app/keystore/release.jks
+          PM_RELEASE_STORE_PASSWORD: ${{ secrets.PM_RELEASE_STORE_PASSWORD }}
+          PM_RELEASE_KEY_ALIAS: ${{ secrets.PM_RELEASE_KEY_ALIAS }}
+          PM_RELEASE_KEY_PASSWORD: ${{ secrets.PM_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app:assemble${{ steps.build_type.outputs.variant }} --stacktrace --max-workers=1
 
       - name: 定位并重命名 APK 文件
@@ -76,4 +88,4 @@ jobs:
           files: ${{ steps.apk.outputs.apk_path }}
           generate_release_notes: true
           draft: false
-          prerelease: true
+          prerelease: false
