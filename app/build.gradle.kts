@@ -22,19 +22,24 @@ android {
         }
     }
 
+    val releaseStoreFilePath = System.getenv("PM_RELEASE_STORE_FILE")?.takeIf { it.isNotBlank() }
+    val releaseSigningAvailable = releaseStoreFilePath != null
+
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("PM_RELEASE_STORE_FILE") ?: "")
-            storePassword = System.getenv("PM_RELEASE_STORE_PASSWORD")
-            keyAlias = System.getenv("PM_RELEASE_KEY_ALIAS")
-            keyPassword = System.getenv("PM_RELEASE_KEY_PASSWORD")
+            if (releaseSigningAvailable) {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = System.getenv("PM_RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("PM_RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("PM_RELEASE_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         debug {
-            // 使用正式包名与签名，方便调试与发布一致
-            signingConfig = signingConfigs.getByName("release")
+            // 使用正式包名；若配置了签名则使用 release 签名，否则回退到 debug 签名
+            signingConfig = if (releaseSigningAvailable) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
