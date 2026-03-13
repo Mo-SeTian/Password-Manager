@@ -299,7 +299,6 @@ fun VaultScreen(
         )
     }
 
-    val selectedEntry = detailPanelState.selectedEntryDetail
 
     LaunchedEffect(uiState.visibleEntries, detailPanelState.selectedEntryId) {
         val currentId = detailPanelState.selectedEntryId ?: return@LaunchedEffect
@@ -383,7 +382,7 @@ fun VaultScreen(
             }
         },
         onDeleteEntry = {
-            val target = selectedEntry
+            val target = uiState.selectedEntry
             if (target != null) {
                 pendingDeleteEntry = target
                 deleteConfirmVisible = true
