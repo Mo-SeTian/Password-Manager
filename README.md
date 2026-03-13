@@ -216,3 +216,12 @@ app/src/main/java/com/mosetian/passwordmanager/
 当前策略改为：
 - **本地只验证 Debug APK**，保证开发反馈速度
 - **Release APK 交给 GitHub Actions 打包**，避免本地环境在 R8 阶段阻塞研发节奏
+
+## 软件截图
+![Screenshot_2026-03-13-21-53-40-336_com mosetian passwordmanager](https://github.com/user-attachments/assets/aac5d138-11d6-485c-a1d5-a15dad86a8f0)
+![Screenshot_2026-03-13-21-54-31-608_com mosetian passwordmanager](https://github.com/user-attachments/assets/7b73e778-9607-4e1e-b674-92265052c10f)
+![Screenshot_2026-03-13-21-53-44-649_com mosetian passwordmanager](https://github.com/user-attachments/assets/71828473-9259-4233-bf01-41c885274313)
+![Screenshot_2026-03-13-21-54-23-196_com mosetian passwordmanager](https://github.com/user-attachments/assets/841f27fb-cbfe-44b6-a8ed-50591e1148f6)
+![Screenshot_2026-03-13-21-54-34-886_com mosetian passwordmanager](https://github.com/user-attachments/assets/194b79cb-2a0f-4fe3-86f1-01dbc1123ac5)
+
+
