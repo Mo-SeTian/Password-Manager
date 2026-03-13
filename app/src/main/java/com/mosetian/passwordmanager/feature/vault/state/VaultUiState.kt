@@ -1,5 +1,6 @@
 package com.mosetian.passwordmanager.feature.vault.state
 
+import com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryEditorForm
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
@@ -11,6 +12,7 @@ data class VaultUiState(
     val groups: List<GroupUiModel> = emptyList(),
     val editableGroups: List<GroupUiModel> = emptyList(),
     val visibleEntries: List<EntryUiModel> = emptyList(),
+    val deletedEntries: List<DeletedEntryUiModel> = emptyList(),
     val selectedGroup: GroupId = GroupId.All,
     val selectedEntry: EntryDetailUiModel? = null,
     val searchQuery: String = "",

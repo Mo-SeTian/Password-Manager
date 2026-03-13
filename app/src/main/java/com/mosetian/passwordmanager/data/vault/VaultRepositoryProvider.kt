@@ -11,6 +11,8 @@ object VaultRepositoryProvider {
             entryDao = db.entryDao(),
             entryDetailDao = db.entryDetailDao(),
             customGroupDao = db.customGroupDao(),
+            deletedEntryDao = db.deletedEntryDao(),
+            deletedEntryDetailDao = db.deletedEntryDetailDao(),
             cryptoManager = VaultCryptoManager()
         )
     }

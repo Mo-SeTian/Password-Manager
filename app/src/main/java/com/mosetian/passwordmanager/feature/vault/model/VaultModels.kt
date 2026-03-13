@@ -2,6 +2,7 @@ package com.mosetian.passwordmanager.feature.vault.model
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Key
@@ -13,6 +14,7 @@ sealed class GroupId {
     data object Favorites : GroupId()
     data object Recent : GroupId()
     data object Weak : GroupId()
+    data object RecycleBin : GroupId()
     data class Custom(val value: String) : GroupId()
 }
 
@@ -75,7 +77,8 @@ object VaultMockData {
         GroupUiModel(GroupId.All, "全部", 0, Icons.Rounded.Folder, true),
         GroupUiModel(GroupId.Favorites, "常用", 0, Icons.Rounded.Favorite, true),
         GroupUiModel(GroupId.Recent, "最近", 0, Icons.Rounded.History, true),
-        GroupUiModel(GroupId.Weak, "弱密码", 0, Icons.Rounded.Shield, true)
+        GroupUiModel(GroupId.Weak, "弱密码", 0, Icons.Rounded.Shield, true),
+        GroupUiModel(GroupId.RecycleBin, "回收站", 0, Icons.Rounded.Delete, true)
     )
 
     val initialCustomGroups = listOf(

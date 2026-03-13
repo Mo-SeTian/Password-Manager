@@ -37,18 +37,21 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.RestoreFromTrash
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -58,8 +61,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -161,6 +166,11 @@ fun VaultScreen(
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
     var deleteConfirmVisible by remember { mutableStateOf(false) }
     var pendingDeleteEntry by remember { mutableStateOf<EntryDetailUiModel?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var clearRecycleConfirmVisible by remember { mutableStateOf(false) }
+    var selectedEntryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var recycleBinVisible by remember { mutableStateOf(false) }
+    var pendingUndoEntryId by remember { mutableStateOf<String?>(null) }
     val configuration = LocalConfiguration.current
     val autoLayoutScale = remember(configuration.screenWidthDp) {
         when {
@@ -176,18 +186,21 @@ fun VaultScreen(
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
     var detailCache by remember { mutableStateOf<Map<String, EntryDetailUiModel>>(emptyMap()) }
+    var deletedEntries by remember { mutableStateOf<List<com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel>>(emptyList()) }
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
     suspend fun reloadVaultData() {
         loading = true
-        val (loadedEntries, loadedGroups) = withContext(Dispatchers.IO) {
+        val (loadedEntries, loadedGroups, loadedDeleted) = withContext(Dispatchers.IO) {
             val loadedEntries = repository.getEntries()
             val loadedGroups = repository.getCustomGroups()
-            loadedEntries to loadedGroups
+            val loadedDeleted = repository.getDeletedEntries()
+            Triple(loadedEntries, loadedGroups, loadedDeleted)
         }
         entries = loadedEntries
         customGroups = loadedGroups
+        deletedEntries = loadedDeleted
         loading = false
     }
 
@@ -265,6 +278,8 @@ fun VaultScreen(
     }
 
     LaunchedEffect(repository) {
+        val threshold = System.currentTimeMillis() - 3L * 24 * 60 * 60 * 1000
+        repository.purgeDeletedEntries(threshold)
         reloadVaultData()
     }
 
@@ -295,6 +310,7 @@ fun VaultScreen(
             editorForm = editorForm,
             groupEditorForm = groupEditorForm,
             entries = entries,
+            deletedEntries = deletedEntries,
             customGroups = customGroups
         )
     }
@@ -322,10 +338,14 @@ fun VaultScreen(
     BackHandler(enabled = deleteConfirmVisible) {
         deleteConfirmVisible = false
     }
+    BackHandler(enabled = clearRecycleConfirmVisible) {
+        clearRecycleConfirmVisible = false
+    }
 
     VaultScreenContent(
         uiState = uiState,
         securitySettings = securitySettings,
+        deletedEntries = uiState.deletedEntries,
         securityPanelVisible = securityPanelVisible,
         uiScale = uiScale,
         loading = loading,
@@ -334,6 +354,8 @@ fun VaultScreen(
         snackbarHostState = snackbarHostState,
         onSelectGroup = {
             selectedGroup = it
+            selectionMode = false
+            selectedEntryIds = emptySet()
         },
         onToggleSearch = {
             searchMode = !searchMode
@@ -373,6 +395,45 @@ fun VaultScreen(
         onDismissGroupEditor = { groupEditorForm = null },
         onEditorFormChange = { editorForm = it },
         onGroupEditorFormChange = { groupEditorForm = it },
+        selectionMode = selectionMode,
+        selectedEntryIds = selectedEntryIds,
+        onToggleSelectionMode = {
+            selectionMode = !selectionMode
+            if (!selectionMode) selectedEntryIds = emptySet()
+        },
+        onToggleSelectEntry = { id ->
+            selectedEntryIds = if (selectedEntryIds.contains(id)) selectedEntryIds - id else selectedEntryIds + id
+        },
+        onSelectAllVisible = { ids ->
+            selectedEntryIds = ids.toSet()
+        },
+        onClearSelection = {
+            selectionMode = false
+            selectedEntryIds = emptySet()
+        },
+        onBatchDelete = { ids ->
+            if (ids.isEmpty()) return@VaultScreenContent
+            scope.launch {
+                repository.deleteEntries(ids)
+                reloadVaultData()
+                selectedEntryIds = emptySet()
+                selectionMode = false
+                val result = snackbarHostState.showSnackbar(message = "已批量移入回收站", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Short)
+                if (result == SnackbarResult.ActionPerformed) {
+                    ids.forEach { repository.restoreEntry(it) }
+                    reloadVaultData()
+                }
+            }
+        },
+        onRestoreEntry = { id ->
+            scope.launch {
+                repository.restoreEntry(id)
+                reloadVaultData()
+            }
+        },
+        onClearRecycleBin = {
+            clearRecycleConfirmVisible = true
+        },
         onCopyField = { label, value ->
             clipboardManager.setText(AnnotatedString(value))
             scope.launch {
@@ -457,12 +518,41 @@ fun VaultScreen(
                         clearSelectedEntryState()
                         deleteConfirmVisible = false
                         pendingDeleteEntry = null
-                        snackbarHostState.showSnackbar("已删除凭据")
+                        pendingUndoEntryId = target.id
+                        val result = snackbarHostState.showSnackbar(message = "已移入回收站", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Short)
+                        if (result == SnackbarResult.ActionPerformed) {
+                            repository.restoreEntry(target.id)
+                            reloadVaultData()
+                        }
+                        pendingUndoEntryId = null
                     }
                 } else {
                     deleteConfirmVisible = false
                 }
             }
+        )
+    }
+
+    if (clearRecycleConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { clearRecycleConfirmVisible = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        repository.clearRecycleBin()
+                        reloadVaultData()
+                        clearRecycleConfirmVisible = false
+                        snackbarHostState.showSnackbar("回收站已清空")
+                    }
+                }) {
+                    Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("确认清空", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { clearRecycleConfirmVisible = false }) { Text("取消") } },
+            title = { Text("清空回收站") },
+            text = { Text("将永久删除回收站内的全部凭据，且无法恢复。") }
         )
     }
 }
@@ -471,6 +561,7 @@ fun VaultScreen(
 private fun VaultScreenContent(
     uiState: VaultUiState,
     securitySettings: SecuritySettings,
+    deletedEntries: List<com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel>,
     securityPanelVisible: Boolean,
     uiScale: Float,
     loading: Boolean,
@@ -497,6 +588,15 @@ private fun VaultScreenContent(
     onDismissGroupEditor: () -> Unit,
     onEditorFormChange: (EntryEditorForm) -> Unit,
     onGroupEditorFormChange: (GroupEditorForm) -> Unit,
+    selectionMode: Boolean,
+    selectedEntryIds: Set<String>,
+    onToggleSelectionMode: () -> Unit,
+    onToggleSelectEntry: (String) -> Unit,
+    onSelectAllVisible: (List<String>) -> Unit,
+    onClearSelection: () -> Unit,
+    onBatchDelete: (List<String>) -> Unit,
+    onRestoreEntry: (String) -> Unit,
+    onClearRecycleBin: () -> Unit,
     onCopyField: (String, String) -> Unit,
     onDeleteEntry: () -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
@@ -506,12 +606,14 @@ private fun VaultScreenContent(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddEntry,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = "新增凭据")
+            if (uiState.selectedGroup != GroupId.RecycleBin) {
+                FloatingActionButton(
+                    onClick = onAddEntry,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = "新增凭据")
+                }
             }
         }
     ) { innerPadding ->
@@ -534,10 +636,18 @@ private fun VaultScreenContent(
                     searchMode = uiState.searchMode,
                     selectedGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroup },
                     loading = loading,
+                    selectionMode = selectionMode,
+                    selectedEntryIds = selectedEntryIds,
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
                     onAddClick = onAddEntry,
+                    onToggleSelectionMode = onToggleSelectionMode,
+                    onToggleSelectEntry = onToggleSelectEntry,
+                    onSelectAllVisible = onSelectAllVisible,
+                    onBatchDelete = onBatchDelete,
+                    onRestoreEntry = onRestoreEntry,
+                    onClearRecycleBin = onClearRecycleBin,
                     layoutDensity = layoutDensity,
                     modifier = Modifier.weight(1f)
                 )
@@ -579,6 +689,7 @@ private fun VaultScreenContent(
                             onDismiss = onDismissDetail,
                             onEdit = onEditEntry,
                             onDelete = onDeleteEntry,
+                            onRestore = if (uiState.selectedGroup == GroupId.RecycleBin) { { onRestoreEntry(uiState.selectedEntry.id) } } else null,
                             onCopy = onCopyField,
                             obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
                         )
@@ -633,7 +744,7 @@ private fun LeftGroupsPane(
     layoutDensity: VaultLayoutDensity
 ) {
     val pinnedGroups = groups.filter { it.id == GroupId.Favorites || it.id == GroupId.Recent || it.id == GroupId.Weak }
-    val primaryGroups = groups.filter { it.id == GroupId.All || it.id is GroupId.Custom }
+    val primaryGroups = groups.filter { it.id == GroupId.All || it.id is GroupId.Custom || it.id == GroupId.RecycleBin }
     Surface(
         modifier = Modifier.fillMaxHeight().width(layoutDensity.groupsPaneWidth),
         shape = RoundedCornerShape(layoutDensity.paneCorner),
@@ -720,10 +831,18 @@ private fun RightEntriesList(
     searchMode: Boolean,
     selectedGroup: GroupUiModel?,
     loading: Boolean,
+    selectionMode: Boolean,
+    selectedEntryIds: Set<String>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
     onAddClick: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
+    onToggleSelectEntry: (String) -> Unit,
+    onSelectAllVisible: (List<String>) -> Unit,
+    onBatchDelete: (List<String>) -> Unit,
+    onRestoreEntry: (String) -> Unit,
+    onClearRecycleBin: () -> Unit,
     layoutDensity: VaultLayoutDensity,
     modifier: Modifier = Modifier
 ) {
@@ -740,9 +859,15 @@ private fun RightEntriesList(
                 entriesCount = entries.size,
                 searchQuery = searchQuery,
                 searchMode = searchMode,
+                selectionMode = selectionMode,
+                selectedEntryIds = selectedEntryIds,
                 onSearchQueryChange = onSearchQueryChange,
                 onToggleSearch = onToggleSearch,
                 onAddClick = onAddClick,
+                onToggleSelectionMode = onToggleSelectionMode,
+                onSelectAll = { onSelectAllVisible(entries.map { it.id }) },
+                onBatchDelete = { onBatchDelete(entries.map { it.id }.filter { selectedEntryIds.contains(it) }) },
+                onClearRecycleBin = onClearRecycleBin,
                 layoutDensity = layoutDensity
             )
             if (loading) {
@@ -764,7 +889,9 @@ private fun RightEntriesList(
                             Text("🫧", style = MaterialTheme.typography.headlineSmall)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                if (searchQuery.isBlank()) "此分组暂无凭据" else "没有找到匹配的凭据",
+                                if (searchQuery.isBlank()) {
+                                    if (selectedGroup?.id == GroupId.RecycleBin) "回收站为空" else "此分组暂无凭据"
+                                } else "没有找到匹配的凭据",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -782,6 +909,9 @@ private fun RightEntriesList(
                     items(entries) { entry ->
                         EntryNameCard(
                             entry = entry,
+                            selectionMode = selectionMode,
+                            selected = selectedEntryIds.contains(entry.id),
+                            onToggleSelect = { onToggleSelectEntry(entry.id) },
                             onClick = { onEntryClick(entry.id) },
                             layoutDensity = layoutDensity
                         )
@@ -798,9 +928,15 @@ private fun VaultTopBar(
     entriesCount: Int,
     searchQuery: String,
     searchMode: Boolean,
+    selectionMode: Boolean,
+    selectedEntryIds: Set<String>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onAddClick: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
+    onSelectAll: () -> Unit,
+    onBatchDelete: () -> Unit,
+    onClearRecycleBin: () -> Unit,
     layoutDensity: VaultLayoutDensity
 ) {
     Column(
@@ -817,12 +953,34 @@ private fun VaultTopBar(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (selectionMode) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("已选择 ${selectedEntryIds.size} 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
             }
             IconButton(onClick = onToggleSearch) {
                 Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary)
             }
-            IconButton(onClick = onAddClick) {
-                Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary)
+            if (selectedGroup?.id == GroupId.RecycleBin) {
+                IconButton(onClick = onClearRecycleBin) {
+                    Icon(Icons.Rounded.Delete, contentDescription = "清空回收站", tint = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                IconButton(onClick = onToggleSelectionMode) {
+                    Icon(Icons.Rounded.DoneAll, contentDescription = "多选", tint = if (selectionMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (selectionMode) {
+                    IconButton(onClick = onSelectAll) {
+                        Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    IconButton(onClick = onAddClick) {
+                        Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
         AnimatedVisibility(visible = searchMode) {
@@ -839,7 +997,7 @@ private fun VaultTopBar(
 }
 
 @Composable
-private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit, layoutDensity: VaultLayoutDensity) {
+private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected: Boolean, onToggleSelect: () -> Unit, onClick: () -> Unit, layoutDensity: VaultLayoutDensity) {
     val elevation by animateDpAsState(targetValue = 4.dp, label = "entry_elevation")
     Surface(
         modifier = Modifier
@@ -853,10 +1011,14 @@ private fun EntryNameCard(entry: EntryUiModel, onClick: () -> Unit, layoutDensit
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                .clickable { if (selectionMode) onToggleSelect() else onClick() }
                 .padding(horizontal = layoutDensity.listItemHorizontal, vertical = layoutDensity.listItemVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
+                Spacer(modifier = Modifier.width(10.dp))
+            }
             Surface(
                 modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(16.dp),
@@ -878,6 +1040,7 @@ private fun EntryDetailOverlay(
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onRestore: (() -> Unit)?,
     onCopy: (String, String) -> Unit,
     obscureSensitiveContent: Boolean
 ) {
@@ -907,7 +1070,11 @@ private fun EntryDetailOverlay(
                         Text("点击字段值即可复制", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary) }
-                    IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error) }
+                    if (onRestore != null) {
+                        IconButton(onClick = onRestore) { Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "还原", tint = MaterialTheme.colorScheme.primary) }
+                    } else {
+                        IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error) }
+                    }
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
                 Spacer(modifier = Modifier.height(16.dp))

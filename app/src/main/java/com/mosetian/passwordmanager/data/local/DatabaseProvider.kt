@@ -11,6 +11,40 @@ private val migration1To2 = object : Migration(1, 2) {
     }
 }
 
+private val migration2To3 = object : Migration(2, 3) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS deleted_entries (
+                id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                iconEmoji TEXT NOT NULL,
+                groupKey TEXT NOT NULL,
+                isFavorite INTEGER NOT NULL,
+                isWeak INTEGER NOT NULL,
+                isRecent INTEGER NOT NULL,
+                deletedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS deleted_entry_details (
+                id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                iconEmoji TEXT NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                website TEXT,
+                note TEXT,
+                customFieldsJson TEXT NOT NULL,
+                deletedAt INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 object DatabaseProvider {
     private const val DATABASE_NAME = "password_manager.db"
 
@@ -23,7 +57,7 @@ object DatabaseProvider {
                 context.applicationContext,
                 PasswordManagerDatabase::class.java,
                 DATABASE_NAME
-            ).addMigrations(migration1To2).build().also { instance = it }
+            ).addMigrations(migration1To2, migration2To3).build().also { instance = it }
         }
     }
 

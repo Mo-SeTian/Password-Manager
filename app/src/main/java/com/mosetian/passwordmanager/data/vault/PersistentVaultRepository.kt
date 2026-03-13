@@ -3,13 +3,19 @@ package com.mosetian.passwordmanager.data.vault
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Folder
 import com.mosetian.passwordmanager.data.local.dao.CustomGroupDao
+import com.mosetian.passwordmanager.data.local.dao.DeletedEntryDao
+import com.mosetian.passwordmanager.data.local.dao.DeletedEntryDetailDao
 import com.mosetian.passwordmanager.data.local.dao.EntryDao
 import com.mosetian.passwordmanager.data.local.dao.EntryDetailDao
 import com.mosetian.passwordmanager.data.local.entity.CustomGroupEntity
+import com.mosetian.passwordmanager.data.local.entity.DeletedEntryDetailEntity
+import com.mosetian.passwordmanager.data.local.entity.DeletedEntryEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryDetailEntity
 import com.mosetian.passwordmanager.data.local.entity.EntryEntity
 import com.mosetian.passwordmanager.data.security.VaultCryptoManager
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
+import com.mosetian.passwordmanager.feature.vault.model.DeletedEntryDetailUiModel
+import com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.GroupId
@@ -21,6 +27,8 @@ class PersistentVaultRepository(
     private val entryDao: EntryDao,
     private val entryDetailDao: EntryDetailDao,
     private val customGroupDao: CustomGroupDao,
+    private val deletedEntryDao: DeletedEntryDao,
+    private val deletedEntryDetailDao: DeletedEntryDetailDao,
     private val cryptoManager: VaultCryptoManager
 ) : VaultRepository {
     override suspend fun getEntries(): List<EntryUiModel> {
@@ -34,6 +42,7 @@ class PersistentVaultRepository(
                     "favorites" -> GroupId.Favorites
                     "recent" -> GroupId.Recent
                     "weak" -> GroupId.Weak
+                    "recycle_bin" -> GroupId.RecycleBin
                     else -> GroupId.Custom(cryptoManager.decrypt(it.groupKey))
                 },
                 isFavorite = it.isFavorite,
@@ -49,6 +58,14 @@ class PersistentVaultRepository(
 
     override suspend fun getEntryDetails(): List<EntryDetailUiModel> {
         return entryDetailDao.getAll().map { it.toUiModel() }
+    }
+
+    override suspend fun getDeletedEntries(): List<DeletedEntryUiModel> {
+        return deletedEntryDao.getAll().map { it.toUiModel(cryptoManager) }
+    }
+
+    override suspend fun getDeletedEntryDetail(id: String): DeletedEntryDetailUiModel? {
+        return deletedEntryDetailDao.getById(id)?.toUiModel(cryptoManager)
     }
 
     override suspend fun getCustomGroups(): List<GroupUiModel> {
@@ -74,6 +91,7 @@ class PersistentVaultRepository(
                     GroupId.Favorites -> "favorites"
                     GroupId.Recent -> "recent"
                     GroupId.Weak -> "weak"
+                    GroupId.RecycleBin -> "recycle_bin"
                     is GroupId.Custom -> cryptoManager.encrypt(group.value)
                 },
                 isFavorite = entry.isFavorite,
@@ -99,8 +117,88 @@ class PersistentVaultRepository(
     }
 
     override suspend fun deleteEntry(id: String) {
+        val now = System.currentTimeMillis()
+        val entry = entryDao.getAll().firstOrNull { it.id == id }
+        val detail = entryDetailDao.getById(id)
+        if (entry != null) {
+            deletedEntryDao.upsert(
+                DeletedEntryEntity(
+                    id = entry.id,
+                    name = entry.name,
+                    iconEmoji = entry.iconEmoji,
+                    groupKey = entry.groupKey,
+                    isFavorite = entry.isFavorite,
+                    isWeak = entry.isWeak,
+                    isRecent = entry.isRecent,
+                    deletedAt = now
+                )
+            )
+        }
+        if (detail != null) {
+            deletedEntryDetailDao.upsert(
+                DeletedEntryDetailEntity(
+                    id = detail.id,
+                    name = detail.name,
+                    iconEmoji = detail.iconEmoji,
+                    username = detail.username,
+                    password = detail.password,
+                    website = detail.website,
+                    note = detail.note,
+                    customFieldsJson = detail.customFieldsJson,
+                    deletedAt = now
+                )
+            )
+        }
         entryDao.deleteById(id)
         entryDetailDao.deleteById(id)
+    }
+
+    override suspend fun deleteEntries(ids: List<String>) {
+        ids.forEach { deleteEntry(it) }
+    }
+
+    override suspend fun restoreEntry(id: String) {
+        val entry = deletedEntryDao.getById(id)
+        val detail = deletedEntryDetailDao.getById(id)
+        if (entry != null) {
+            entryDao.upsert(
+                EntryEntity(
+                    id = entry.id,
+                    name = entry.name,
+                    iconEmoji = entry.iconEmoji,
+                    groupKey = entry.groupKey,
+                    isFavorite = entry.isFavorite,
+                    isWeak = entry.isWeak,
+                    isRecent = entry.isRecent
+                )
+            )
+            deletedEntryDao.deleteById(id)
+        }
+        if (detail != null) {
+            entryDetailDao.upsert(
+                EntryDetailEntity(
+                    id = detail.id,
+                    name = detail.name,
+                    iconEmoji = detail.iconEmoji,
+                    username = detail.username,
+                    password = detail.password,
+                    website = detail.website,
+                    note = detail.note,
+                    customFieldsJson = detail.customFieldsJson
+                )
+            )
+            deletedEntryDetailDao.deleteById(id)
+        }
+    }
+
+    override suspend fun clearRecycleBin() {
+        deletedEntryDao.deleteAll()
+        deletedEntryDetailDao.deleteAll()
+    }
+
+    override suspend fun purgeDeletedEntries(olderThanMillis: Long) {
+        deletedEntryDao.deleteOlderThan(olderThanMillis)
+        deletedEntryDetailDao.deleteOlderThan(olderThanMillis)
     }
 
     override suspend fun addGroup(group: GroupUiModel) {
