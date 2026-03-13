@@ -28,6 +28,11 @@ class InMemoryVaultRepository : VaultRepository {
         if (index >= 0) entryDetails[index] = detail else entryDetails.add(0, detail)
     }
 
+    override suspend fun deleteEntry(id: String) {
+        entries.removeAll { it.id == id }
+        entryDetails.removeAll { it.id == id }
+    }
+
     override suspend fun addGroup(group: GroupUiModel) {
         customGroups.add(group)
     }

@@ -13,4 +13,7 @@ interface EntryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: EntryEntity)
+
+    @Query("DELETE FROM entries WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

@@ -12,6 +12,7 @@ interface VaultRepository {
 
     suspend fun upsertEntry(entry: EntryUiModel)
     suspend fun upsertEntryDetail(detail: EntryDetailUiModel)
+    suspend fun deleteEntry(id: String)
     suspend fun addGroup(group: GroupUiModel)
     suspend fun migratePlaintextDataIfNeeded()
 }

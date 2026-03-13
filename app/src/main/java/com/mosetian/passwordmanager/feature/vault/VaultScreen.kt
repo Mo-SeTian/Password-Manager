@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lock
@@ -158,6 +159,8 @@ fun VaultScreen(
     var securitySettings by remember(initialSecuritySettings) { mutableStateOf(initialSecuritySettings) }
     var securityPanelVisible by remember { mutableStateOf(false) }
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
+    var deleteConfirmVisible by remember { mutableStateOf(false) }
+    var pendingDeleteEntry by remember { mutableStateOf<EntryDetailUiModel?>(null) }
     val configuration = LocalConfiguration.current
     val autoLayoutScale = remember(configuration.screenWidthDp) {
         when {
@@ -315,6 +318,9 @@ fun VaultScreen(
     BackHandler(enabled = securityPanelVisible) {
         securityPanelVisible = false
     }
+    BackHandler(enabled = deleteConfirmVisible) {
+        deleteConfirmVisible = false
+    }
 
     VaultScreenContent(
         uiState = uiState,
@@ -374,6 +380,13 @@ fun VaultScreen(
                 )
             }
         },
+        onDeleteEntry = {
+            val target = selectedEntry
+            if (target != null) {
+                pendingDeleteEntry = target
+                deleteConfirmVisible = true
+            }
+        },
         onSaveEntry = { form ->
             scope.launch {
                 val targetGroup = form.groupId
@@ -425,6 +438,32 @@ fun VaultScreen(
             }
         }
     )
+
+    if (deleteConfirmVisible) {
+        DeleteEntryDialog(
+            entry = pendingDeleteEntry,
+            onDismiss = {
+                deleteConfirmVisible = false
+                pendingDeleteEntry = null
+            },
+            onConfirm = {
+                val target = pendingDeleteEntry
+                if (target != null) {
+                    scope.launch {
+                        repository.deleteEntry(target.id)
+                        entries = entries.filterNot { it.id == target.id }
+                        detailCache = detailCache - target.id
+                        clearSelectedEntryState()
+                        deleteConfirmVisible = false
+                        pendingDeleteEntry = null
+                        snackbarHostState.showSnackbar("已删除凭据")
+                    }
+                } else {
+                    deleteConfirmVisible = false
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -458,6 +497,7 @@ private fun VaultScreenContent(
     onEditorFormChange: (EntryEditorForm) -> Unit,
     onGroupEditorFormChange: (GroupEditorForm) -> Unit,
     onCopyField: (String, String) -> Unit,
+    onDeleteEntry: () -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
     onSaveGroup: (GroupEditorForm) -> Unit
 ) {
@@ -537,6 +577,7 @@ private fun VaultScreenContent(
                             entry = uiState.selectedEntry,
                             onDismiss = onDismissDetail,
                             onEdit = onEditEntry,
+                            onDelete = onDeleteEntry,
                             onCopy = onCopyField,
                             obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
                         )
@@ -576,6 +617,7 @@ private fun VaultScreenContent(
                     onRequestDisableAppLock = onRequestDisableAppLock
                 )
             }
+
         }
     }
 }
@@ -834,6 +876,7 @@ private fun EntryDetailOverlay(
     entry: EntryDetailUiModel,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit,
     onCopy: (String, String) -> Unit,
     obscureSensitiveContent: Boolean
 ) {
@@ -863,6 +906,7 @@ private fun EntryDetailOverlay(
                         Text("点击字段值即可复制", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = MaterialTheme.colorScheme.primary) }
+                    IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error) }
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, contentDescription = "关闭") }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1000,6 +1044,30 @@ private fun SecuritySettingRow(
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@Composable
+private fun DeleteEntryDialog(
+    entry: EntryDetailUiModel?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val entryName = entry?.name ?: "该凭据"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("确认删除", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+        title = { Text("删除凭据") },
+        text = { Text("确定要删除 $entryName 吗？此操作不可撤销。") }
+    )
 }
 
 @Composable

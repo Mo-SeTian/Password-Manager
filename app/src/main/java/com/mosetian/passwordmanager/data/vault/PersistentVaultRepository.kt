@@ -98,6 +98,11 @@ class PersistentVaultRepository(
         )
     }
 
+    override suspend fun deleteEntry(id: String) {
+        entryDao.deleteById(id)
+        entryDetailDao.deleteById(id)
+    }
+
     override suspend fun addGroup(group: GroupUiModel) {
         val key = (group.id as? GroupId.Custom)?.value ?: return
         customGroupDao.insert(

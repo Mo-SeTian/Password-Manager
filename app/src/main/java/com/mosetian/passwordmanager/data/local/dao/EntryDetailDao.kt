@@ -16,4 +16,7 @@ interface EntryDetailDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(detail: EntryDetailEntity)
+
+    @Query("DELETE FROM entry_details WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
