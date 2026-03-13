@@ -422,6 +422,7 @@ fun VaultScreen(
                 if (result == SnackbarResult.ActionPerformed) {
                     ids.forEach { repository.restoreEntry(it) }
                     reloadVaultData()
+                    snackbarHostState.showSnackbar("已撤销删除")
                 }
             }
         },
@@ -429,6 +430,7 @@ fun VaultScreen(
             scope.launch {
                 repository.restoreEntry(id)
                 reloadVaultData()
+                snackbarHostState.showSnackbar("已从回收站还原")
             }
         },
         onClearRecycleBin = {
@@ -523,6 +525,7 @@ fun VaultScreen(
                         if (result == SnackbarResult.ActionPerformed) {
                             repository.restoreEntry(target.id)
                             reloadVaultData()
+                            snackbarHostState.showSnackbar("已撤销删除")
                         }
                         pendingUndoEntryId = null
                     }
@@ -646,6 +649,7 @@ private fun VaultScreenContent(
                     onToggleSelectEntry = onToggleSelectEntry,
                     onSelectAllVisible = onSelectAllVisible,
                     onBatchDelete = onBatchDelete,
+                    onClearSelection = onClearSelection,
                     onRestoreEntry = onRestoreEntry,
                     onClearRecycleBin = onClearRecycleBin,
                     layoutDensity = layoutDensity,
@@ -841,6 +845,7 @@ private fun RightEntriesList(
     onToggleSelectEntry: (String) -> Unit,
     onSelectAllVisible: (List<String>) -> Unit,
     onBatchDelete: (List<String>) -> Unit,
+    onClearSelection: () -> Unit,
     onRestoreEntry: (String) -> Unit,
     onClearRecycleBin: () -> Unit,
     layoutDensity: VaultLayoutDensity,
@@ -867,6 +872,7 @@ private fun RightEntriesList(
                 onToggleSelectionMode = onToggleSelectionMode,
                 onSelectAll = { onSelectAllVisible(entries.map { it.id }) },
                 onBatchDelete = { onBatchDelete(entries.map { it.id }.filter { selectedEntryIds.contains(it) }) },
+                onClearSelection = onClearSelection,
                 onClearRecycleBin = onClearRecycleBin,
                 layoutDensity = layoutDensity
             )
@@ -897,7 +903,9 @@ private fun RightEntriesList(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                if (searchQuery.isBlank()) "你可以点击右上角的新增按钮创建第一条凭据" else "试试更短的关键词，或者换一个分组看看",
+                                if (searchQuery.isBlank()) {
+                                    if (selectedGroup?.id == GroupId.RecycleBin) "回收站保留 3 天，可在详情中还原或右上角清空" else "你可以点击右上角的新增按钮创建第一条凭据"
+                                } else "试试更短的关键词，或者换一个分组看看",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -936,6 +944,7 @@ private fun VaultTopBar(
     onToggleSelectionMode: () -> Unit,
     onSelectAll: () -> Unit,
     onBatchDelete: () -> Unit,
+    onClearSelection: () -> Unit,
     onClearRecycleBin: () -> Unit,
     layoutDensity: VaultLayoutDensity
 ) {
@@ -975,6 +984,9 @@ private fun VaultTopBar(
                     }
                     IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
                         Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Rounded.Close, contentDescription = "退出多选", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     IconButton(onClick = onAddClick) {
