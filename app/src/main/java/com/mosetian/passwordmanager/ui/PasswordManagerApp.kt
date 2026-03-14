@@ -1,6 +1,7 @@
 package com.mosetian.passwordmanager.ui
 
 import android.app.Activity
+import android.view.WindowManager
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -90,6 +91,14 @@ fun PasswordManagerApp() {
         activity?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = !securitySettings.darkModeEnabled
             WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightNavigationBars = !securitySettings.darkModeEnabled
+            if (securitySettings.blockScreenshotsEnabled) {
+                window.setFlags(
+                    WindowManager.LayoutParams.FLAG_SECURE,
+                    WindowManager.LayoutParams.FLAG_SECURE
+                )
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
         }
     }
 

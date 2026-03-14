@@ -235,3 +235,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 
 ## 更新说明
 
+
+
+## v2.1.3
+- 安全能力：阻止截图、剪贴板自动清理（定时）、后台自动锁定优化、敏感信息隐藏强化、生物识别/应用锁接入完善。

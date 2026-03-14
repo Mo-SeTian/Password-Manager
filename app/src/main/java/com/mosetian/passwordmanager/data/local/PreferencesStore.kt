@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mosetian.passwordmanager.feature.security.AppLockState
@@ -18,6 +19,7 @@ class PreferencesStore(private val context: Context) {
     private val appLockEnabledKey = booleanPreferencesKey("app_lock_enabled")
     private val biometricUnlockEnabledKey = booleanPreferencesKey("biometric_unlock_enabled")
     private val autoClearClipboardEnabledKey = booleanPreferencesKey("auto_clear_clipboard_enabled")
+    private val autoClearClipboardSecondsKey = intPreferencesKey("auto_clear_clipboard_seconds")
     private val blockScreenshotsEnabledKey = booleanPreferencesKey("block_screenshots_enabled")
     private val obscureSensitiveContentEnabledKey = booleanPreferencesKey("obscure_sensitive_content_enabled")
     private val uiScaleKey = floatPreferencesKey("ui_scale")
@@ -36,6 +38,7 @@ class PreferencesStore(private val context: Context) {
             appLockEnabled = prefs[appLockEnabledKey] ?: false,
             biometricUnlockEnabled = prefs[biometricUnlockEnabledKey] ?: false,
             autoClearClipboardEnabled = prefs[autoClearClipboardEnabledKey] ?: true,
+            autoClearClipboardSeconds = prefs[autoClearClipboardSecondsKey] ?: 30,
             blockScreenshotsEnabled = prefs[blockScreenshotsEnabledKey] ?: false,
             obscureSensitiveContentEnabled = prefs[obscureSensitiveContentEnabledKey] ?: false,
             darkModeEnabled = prefs[darkModeKey] ?: true,
@@ -71,6 +74,7 @@ class PreferencesStore(private val context: Context) {
             prefs[appLockEnabledKey] = settings.appLockEnabled
             prefs[biometricUnlockEnabledKey] = settings.biometricUnlockEnabled
             prefs[autoClearClipboardEnabledKey] = settings.autoClearClipboardEnabled
+            prefs[autoClearClipboardSecondsKey] = settings.autoClearClipboardSeconds
             prefs[blockScreenshotsEnabledKey] = settings.blockScreenshotsEnabled
             prefs[obscureSensitiveContentEnabledKey] = settings.obscureSensitiveContentEnabled
             prefs[darkModeKey] = settings.darkModeEnabled

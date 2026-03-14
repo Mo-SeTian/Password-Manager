@@ -105,6 +105,7 @@ import com.mosetian.passwordmanager.feature.vault.model.toEditorForm
 import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -613,8 +614,12 @@ fun VaultScreen(
             clipboardManager.setText(AnnotatedString(value))
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    if (securitySettings.autoClearClipboardEnabled) "已复制$label（后续将支持自动清空）" else "已复制$label"
+                    if (securitySettings.autoClearClipboardEnabled) "已复制$label，${securitySettings.autoClearClipboardSeconds}秒后自动清空" else "已复制$label"
                 )
+                if (securitySettings.autoClearClipboardEnabled) {
+                    delay(securitySettings.autoClearClipboardSeconds * 1000L)
+                    clipboardManager.setText(AnnotatedString(""))
+                }
             }
         },
         onDeleteEntry = {
@@ -1346,6 +1351,14 @@ private fun SecuritySettingsDialog(
                 }
                 SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled) {
                     onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
+                }
+                if (settings.autoClearClipboardEnabled) {
+                    Text("自动清理剪贴板时间（秒）: ${settings.autoClearClipboardSeconds}", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = settings.autoClearClipboardSeconds.toFloat(),
+                        onValueChange = { onSettingsChange(settings.copy(autoClearClipboardSeconds = it.toInt().coerceIn(5, 120))) },
+                        valueRange = 5f..120f
+                    )
                 }
                 SecuritySettingRow("自动填充（预留）", false) { }
                 SecuritySettingRow("阻止截图（预留）", settings.blockScreenshotsEnabled) {
