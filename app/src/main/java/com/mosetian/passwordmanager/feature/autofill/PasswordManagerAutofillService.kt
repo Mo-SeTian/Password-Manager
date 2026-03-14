@@ -42,7 +42,6 @@ class PasswordManagerAutofillService : AutofillService() {
                 callback.onSuccess(null)
                 return@runBlocking
             }
-            val autofillKey = fields.autofillKey
             val repository = VaultRepositoryProvider.createPersistent(context)
             val entries = withContext(Dispatchers.IO) { repository.getEntries() }
             val details = mutableListOf<EntryDetailUiModel>()
@@ -52,8 +51,21 @@ class PasswordManagerAutofillService : AutofillService() {
                 }
             }
             val preferencesStore = PreferencesStore(context)
-            val lastEntryId = preferencesStore.getLastAutofillSelection(autofillKey)
-            val sorted = details.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }.thenBy { it.name })
+            val keys = extractAutofillKeys(structure, fields)
+            var lastEntryId: String? = null
+            for (key in keys) {
+                lastEntryId = preferencesStore.getLastAutofillSelection(key)
+                if (!lastEntryId.isNullOrBlank()) break
+            }
+            val domainKey = keys.firstOrNull { it.contains(".") }
+            val filtered = if (domainKey != null) {
+                val matched = details.filter { detail ->
+                    val host = extractHost(detail.website)
+                    host != null && host.contains(domainKey, ignoreCase = true)
+                }
+                if (matched.isNotEmpty()) matched else details
+            } else details
+            val sorted = filtered.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }.thenBy { it.name })
             if (sorted.isEmpty()) {
                 callback.onSuccess(null)
                 return@runBlocking
@@ -96,7 +108,9 @@ class PasswordManagerAutofillService : AutofillService() {
                         }
                     }
                     if (matched != null) {
-                        PreferencesStore(this@PasswordManagerAutofillService).setLastAutofillSelection(fields.autofillKey, matched.id)
+                        val prefs = PreferencesStore(this@PasswordManagerAutofillService)
+                        val keys = extractAutofillKeys(structure, fields)
+                        keys.forEach { key -> prefs.setLastAutofillSelection(key, matched.id) }
                     }
                 }
             }
@@ -153,6 +167,25 @@ class PasswordManagerAutofillService : AutofillService() {
             }
         }
         return ParsedValues(username, password)
+    }
+
+
+    private fun extractAutofillKeys(structure: AssistStructure, fields: ParsedFields): List<String> {
+        val keys = mutableListOf<String>()
+        val packageName = structure.activityComponent?.packageName
+        if (!packageName.isNullOrBlank()) keys.add(packageName)
+        if (!fields.autofillKey.isBlank()) keys.add(fields.autofillKey)
+        return keys.distinct()
+    }
+
+    private fun extractHost(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        return try {
+            val host = java.net.URI(value).host
+            if (host.isNullOrBlank()) value else host
+        } catch (e: Exception) {
+            value
+        }
     }
 
     private fun traverse(node: AssistStructure.ViewNode, onVisit: (AssistStructure.ViewNode) -> Unit) {
