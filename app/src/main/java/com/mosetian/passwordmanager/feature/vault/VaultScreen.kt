@@ -169,7 +169,7 @@ fun VaultScreen(
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
     var deleteConfirmVisible by remember { mutableStateOf(false) }
     var pendingDeleteEntry by remember { mutableStateOf<EntryDetailUiModel?>(null) }
-    var selectionMode by remember { mutableStateOf(true) }
+    var selectionMode by remember { mutableStateOf(false) }
     var clearRecycleConfirmVisible by remember { mutableStateOf(false) }
     var selectedEntryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var recycleBinVisible by remember { mutableStateOf(false) }
@@ -401,6 +401,10 @@ fun VaultScreen(
         onGroupEditorFormChange = { groupEditorForm = it },
         selectionMode = selectionMode,
         selectedEntryIds = selectedEntryIds,
+        onToggleSelectionMode = {
+            selectionMode = !selectionMode
+            if (!selectionMode) selectedEntryIds = emptySet()
+        },
         onToggleSelectEntry = { id ->
             selectedEntryIds = if (selectedEntryIds.contains(id)) selectedEntryIds - id else selectedEntryIds + id
         },
@@ -408,6 +412,7 @@ fun VaultScreen(
             selectedEntryIds = ids.toSet()
         },
         onClearSelection = {
+            selectionMode = false
             selectedEntryIds = emptySet()
         },
         onBatchDelete = { ids ->
@@ -416,6 +421,7 @@ fun VaultScreen(
                 repository.deleteEntries(ids)
                 reloadVaultData()
                 selectedEntryIds = emptySet()
+                selectionMode = false
                 val result = snackbarHostState.showSnackbar(message = "已批量移入回收站", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Short)
                 if (result == SnackbarResult.ActionPerformed) {
                     ids.forEach { repository.restoreEntry(it) }
@@ -594,6 +600,7 @@ private fun VaultScreenContent(
     onGroupEditorFormChange: (GroupEditorForm) -> Unit,
     selectionMode: Boolean,
     selectedEntryIds: Set<String>,
+    onToggleSelectionMode: () -> Unit,
     onToggleSelectEntry: (String) -> Unit,
     onSelectAllVisible: (List<String>) -> Unit,
     onClearSelection: () -> Unit,
@@ -643,8 +650,9 @@ private fun VaultScreenContent(
                     selectedEntryIds = selectedEntryIds,
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
+                    onToggleSelectionMode = onToggleSelectionMode,
                     onEntryClick = onEntryClick,
-                                    onToggleSelectEntry = onToggleSelectEntry,
+                    onToggleSelectEntry = onToggleSelectEntry,
                     onSelectAllVisible = onSelectAllVisible,
                     onBatchDelete = onBatchDelete,
                     onClearSelection = onClearSelection,
@@ -837,6 +845,7 @@ private fun RightEntriesList(
     selectedEntryIds: Set<String>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
     onEntryClick: (String) -> Unit,
     onToggleSelectEntry: (String) -> Unit,
     onSelectAllVisible: (List<String>) -> Unit,
@@ -864,6 +873,7 @@ private fun RightEntriesList(
                 selectedEntryIds = selectedEntryIds,
                 onSearchQueryChange = onSearchQueryChange,
                 onToggleSearch = onToggleSearch,
+                onToggleSelectionMode = onToggleSelectionMode,
                 onSelectAll = { onSelectAllVisible(entries.map { it.id }) },
                 onBatchDelete = { onBatchDelete(entries.map { it.id }.filter { selectedEntryIds.contains(it) }) },
                 onClearSelection = onClearSelection,
@@ -934,6 +944,7 @@ private fun VaultTopBar(
     selectedEntryIds: Set<String>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
     onSelectAll: () -> Unit,
     onBatchDelete: () -> Unit,
     onClearSelection: () -> Unit,
@@ -967,14 +978,19 @@ private fun VaultTopBar(
                     Icon(Icons.Rounded.Delete, contentDescription = "清空回收站", tint = MaterialTheme.colorScheme.error)
                 }
             } else {
-                IconButton(onClick = onSelectAll) {
-                    Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
+                IconButton(onClick = onToggleSelectionMode) {
+                    Icon(Icons.Rounded.DoneAll, contentDescription = "选择", tint = MaterialTheme.colorScheme.primary)
                 }
-                IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
-                    Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = onClearSelection) {
-                    Icon(Icons.Rounded.Close, contentDescription = "清空选择", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selectionMode) {
+                    IconButton(onClick = onSelectAll) {
+                        Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Rounded.Close, contentDescription = "取消", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -1006,12 +1022,14 @@ private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected:
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                .clickable { if (selectionMode) onToggleSelect() else onClick() }
                 .padding(horizontal = layoutDensity.listItemHorizontal, vertical = layoutDensity.listItemVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
-            Spacer(modifier = Modifier.width(10.dp))
+                    if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
+                Spacer(modifier = Modifier.width(10.dp))
+            }
             Surface(
                 modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(16.dp),
