@@ -1278,9 +1278,9 @@ private fun EntryDetailOverlay(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CopyableField("账号", entry.username, onCopy)
+                    CopyableField("账号", entry.username, onCopy, obscureSensitiveContent)
                     SecretCopyableField("密码", entry.password, onCopy, obscureSensitiveContent)
-                    entry.website?.let { CopyableField("网址", it, onCopy) }
+                    entry.website?.let { CopyableField("网址", it, onCopy, obscureSensitiveContent) }
                     entry.note?.let { StaticField("备注", it) }
                     if (entry.customFields.isNotEmpty()) {
                         Text("自定义信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
@@ -1594,7 +1594,7 @@ private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFo
 }
 
 @Composable
-private fun CopyableField(label: String, value: String, onCopy: (String, String) -> Unit) {
+private fun CopyableField(label: String, value: String, onCopy: (String, String) -> Unit, obscureSensitiveContent: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(
@@ -1649,6 +1649,6 @@ private fun StaticField(label: String, value: String) {
 @Composable
 private fun CustomFieldRow(field: CustomFieldUiModel, onCopy: (String, String) -> Unit, obscureSensitiveContent: Boolean) {
     if (field.isSecret) SecretCopyableField(field.label, field.value, onCopy, obscureSensitiveContent)
-    else if (field.copyable) CopyableField(field.label, field.value, onCopy)
+    else if (field.copyable) CopyableField(field.label, field.value, onCopy, obscureSensitiveContent)
     else StaticField(field.label, field.value)
 }
