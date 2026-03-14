@@ -8,5 +8,6 @@ data class SecuritySettings(
     val blockScreenshotsEnabled: Boolean = false,
     val obscureSensitiveContentEnabled: Boolean = false,
     val darkModeEnabled: Boolean = true,
-    val autoLockOnBackgroundEnabled: Boolean = true
+    val autoLockOnBackgroundEnabled: Boolean = true,
+    val autoLockDelaySeconds: Int = 0
 )

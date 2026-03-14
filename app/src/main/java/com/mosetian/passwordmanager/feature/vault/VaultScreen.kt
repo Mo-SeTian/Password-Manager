@@ -1384,6 +1384,14 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("切到后台自动锁定", settings.autoLockOnBackgroundEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(autoLockOnBackgroundEnabled = it))
                 })
+                if (settings.autoLockOnBackgroundEnabled) {
+                    Text("自动锁定延迟（秒）: ${settings.autoLockDelaySeconds}", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = settings.autoLockDelaySeconds.toFloat(),
+                        onValueChange = { onSettingsChange(settings.copy(autoLockDelaySeconds = it.toInt().coerceIn(0, 60))) },
+                        valueRange = 0f..60f
+                    )
+                }
                 Text(
                     "页面密度（拖动条）: ${String.format("%.2f", uiScale)}x",
                     style = MaterialTheme.typography.bodyLarge

@@ -33,6 +33,7 @@ import com.mosetian.passwordmanager.feature.vault.VaultScreen
 import com.mosetian.passwordmanager.ui.theme.PasswordManagerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -80,7 +81,15 @@ fun PasswordManagerApp() {
                 securitySettings.autoLockOnBackgroundEnabled &&
                 unlocked
             ) {
-                unlocked = false
+                val delaySeconds = securitySettings.autoLockDelaySeconds
+                if (delaySeconds <= 0) {
+                    unlocked = false
+                } else {
+                    scope.launch {
+                        delay(delaySeconds * 1000L)
+                        unlocked = false
+                    }
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
