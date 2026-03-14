@@ -434,8 +434,12 @@ fun VaultScreen(
                     Text("导出后密码为明文，请妥善保存")
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         TextButton(onClick = {
-                            exportPayload = buildExportJson(entries, detailCache)
-                            exportConfirmVisible = true
+                            if (entries.isEmpty()) {
+                                scope.launch { snackbarHostState.showSnackbar("暂无可导出的数据") }
+                            } else {
+                                exportPayload = buildExportJson(entries, detailCache)
+                                exportConfirmVisible = true
+                            }
                         }) { Text("导出 JSON") }
                     }
                     OutlinedTextField(
@@ -448,37 +452,47 @@ fun VaultScreen(
                     )
                     TextButton(onClick = {
                         val raw = importPayload.trim()
-                        if (raw.isNotBlank()) {
-                            val items = parseJsonImport(raw)
-                            scope.launch {
-                                items.forEach { detail ->
-                                    val entry = EntryUiModel(
-                                        id = detail.id,
-                                        name = detail.name,
-                                        iconEmoji = detail.iconEmoji,
-                                        groupId = GroupId.All,
-                                        isFavorite = false,
-                                        isWeak = detail.password.length in 1..6,
-                                        isRecent = true
-                                    )
-                                    val entryDetail = EntryDetailUiModel(
-                                        id = detail.id,
-                                        name = detail.name,
-                                        iconEmoji = detail.iconEmoji,
-                                        username = detail.username,
-                                        password = detail.password,
-                                        website = detail.website,
-                                        note = detail.note,
-                                        customFields = detail.customFields
-                                    )
-                                    repository.upsertEntry(entry)
-                                    repository.upsertEntryDetail(entryDetail)
+                        if (raw.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("导入内容为空") }
+                            return@TextButton
+                        }
+                        scope.launch {
+                            try {
+                                val items = parseJsonImport(raw)
+                                if (items.isEmpty()) {
+                                    snackbarHostState.showSnackbar("导入内容为空")
+                                } else {
+                                    items.forEach { detail ->
+                                        val entry = EntryUiModel(
+                                            id = detail.id,
+                                            name = detail.name,
+                                            iconEmoji = detail.iconEmoji,
+                                            groupId = GroupId.All,
+                                            isFavorite = false,
+                                            isWeak = detail.password.length in 1..6,
+                                            isRecent = true
+                                        )
+                                        val entryDetail = EntryDetailUiModel(
+                                            id = detail.id,
+                                            name = detail.name,
+                                            iconEmoji = detail.iconEmoji,
+                                            username = detail.username,
+                                            password = detail.password,
+                                            website = detail.website,
+                                            note = detail.note,
+                                            customFields = detail.customFields
+                                        )
+                                        repository.upsertEntry(entry)
+                                        repository.upsertEntryDetail(entryDetail)
+                                    }
+                                    reloadVaultData()
+                                    snackbarHostState.showSnackbar("导入完成（已覆盖）")
+                                    exportDialogVisible = false
                                 }
-                                reloadVaultData()
-                                snackbarHostState.showSnackbar("导入完成（已覆盖）")
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("导入失败：格式不正确")
                             }
                         }
-                        exportDialogVisible = false
                     }) { Text("导入") }
                 }
             }
@@ -1333,6 +1347,7 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled) {
                     onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
                 }
+                SecuritySettingRow("自动填充（预留）", false) { }
                 SecuritySettingRow("阻止截图（预留）", settings.blockScreenshotsEnabled) {
                     onSettingsChange(settings.copy(blockScreenshotsEnabled = it))
                 }
