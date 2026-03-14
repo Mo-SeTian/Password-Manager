@@ -171,6 +171,10 @@ fun VaultScreen(
     var pendingDeleteEntry by remember { mutableStateOf<EntryDetailUiModel?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var clearRecycleConfirmVisible by remember { mutableStateOf(false) }
+    var exportDialogVisible by remember { mutableStateOf(false) }
+    var exportConfirmVisible by remember { mutableStateOf(false) }
+    var exportPayload by remember { mutableStateOf("") }
+    var importPayload by remember { mutableStateOf("") }
     var selectedEntryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var recycleBinVisible by remember { mutableStateOf(false) }
     var pendingUndoEntryId by remember { mutableStateOf<String?>(null) }
@@ -193,6 +197,80 @@ fun VaultScreen(
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
+
+    fun buildExportJson(entries: List<EntryUiModel>, details: Map<String, EntryDetailUiModel>): String {
+        val array = JSONArray()
+        entries.forEach { entry ->
+            val detail = details[entry.id]
+            val obj = JSONObject()
+            obj.put("id", entry.id)
+            obj.put("name", entry.name)
+            obj.put("iconEmoji", entry.iconEmoji)
+            obj.put("groupId", when (val group = entry.groupId) {
+                GroupId.All -> "all"
+                GroupId.Favorites -> "favorites"
+                GroupId.Recent -> "recent"
+                GroupId.Weak -> "weak"
+                GroupId.RecycleBin -> "recycle_bin"
+                is GroupId.Custom -> "custom:${group.value}"
+            })
+            obj.put("isFavorite", entry.isFavorite)
+            obj.put("isWeak", entry.isWeak)
+            obj.put("isRecent", entry.isRecent)
+            if (detail != null) {
+                obj.put("username", detail.username)
+                obj.put("password", detail.password)
+                obj.put("website", detail.website ?: JSONObject.NULL)
+                obj.put("note", detail.note ?: JSONObject.NULL)
+                val fields = JSONArray()
+                detail.customFields.forEach { field ->
+                    val f = JSONObject()
+                    f.put("label", field.label)
+                    f.put("value", field.value)
+                    fields.put(f)
+                }
+                obj.put("customFields", fields)
+            }
+            array.put(obj)
+        }
+        return array.toString(2)
+    }
+
+    fun parseJsonImport(raw: String): List<EntryDetailUiModel> {
+        val array = JSONArray(raw)
+        val list = mutableListOf<EntryDetailUiModel>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val id = obj.optString("id")
+            val name = obj.optString("name")
+            val icon = obj.optString("iconEmoji")
+            val username = obj.optString("username")
+            val password = obj.optString("password")
+            val website = obj.opt("website")?.takeIf { it != JSONObject.NULL }?.toString()
+            val note = obj.opt("note")?.takeIf { it != JSONObject.NULL }?.toString()
+            val fields = mutableListOf<CustomFieldUiModel>()
+            val fieldArray = obj.optJSONArray("customFields")
+            if (fieldArray != null) {
+                for (j in 0 until fieldArray.length()) {
+                    val f = fieldArray.getJSONObject(j)
+                    fields.add(CustomFieldUiModel(f.optString("label"), f.optString("value")))
+                }
+            }
+            list.add(
+                EntryDetailUiModel(
+                    id = id,
+                    name = name,
+                    iconEmoji = icon,
+                    username = username,
+                    password = password,
+                    website = website,
+                    note = note,
+                    customFields = fields
+                )
+            )
+        }
+        return list
+    }
 
     suspend fun reloadVaultData() {
         loading = true
@@ -346,6 +424,80 @@ fun VaultScreen(
         clearRecycleConfirmVisible = false
     }
 
+    if (exportDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { exportDialogVisible = false },
+            confirmButton = { TextButton(onClick = { exportDialogVisible = false }) { Text("关闭") } },
+            title = { Text("导入 / 导出") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("导出后密码为明文，请妥善保存")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(onClick = {
+                            exportPayload = buildExportJson(entries, detailCache)
+                            exportConfirmVisible = true
+                        }) { Text("导出 JSON") }
+                    }
+                    OutlinedTextField(
+                        value = importPayload,
+                        onValueChange = { importPayload = it },
+                        label = { Text("导入 JSON 内容") },
+                        minLines = 4,
+                        maxLines = 10,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    TextButton(onClick = {
+                        val raw = importPayload.trim()
+                        if (raw.isNotBlank()) {
+                            val items = parseJsonImport(raw)
+                            scope.launch {
+                                items.forEach { detail ->
+                                    val entry = EntryUiModel(
+                                        id = detail.id,
+                                        name = detail.name,
+                                        iconEmoji = detail.iconEmoji,
+                                        groupId = GroupId.All,
+                                        isFavorite = false,
+                                        isWeak = detail.password.length in 1..6,
+                                        isRecent = true
+                                    )
+                                    val entryDetail = EntryDetailUiModel(
+                                        id = detail.id,
+                                        name = detail.name,
+                                        iconEmoji = detail.iconEmoji,
+                                        username = detail.username,
+                                        password = detail.password,
+                                        website = detail.website,
+                                        note = detail.note,
+                                        customFields = detail.customFields
+                                    )
+                                    repository.upsertEntry(entry)
+                                    repository.upsertEntryDetail(entryDetail)
+                                }
+                                reloadVaultData()
+                                snackbarHostState.showSnackbar("导入完成（已覆盖）")
+                            }
+                        }
+                        exportDialogVisible = false
+                    }) { Text("导入") }
+                }
+            }
+        )
+    }
+
+    if (exportConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { exportConfirmVisible = false },
+            confirmButton = { TextButton(onClick = { exportConfirmVisible = false }) { Text("完成") } },
+            title = { Text("导出内容") },
+            text = {
+                SelectionContainer {
+                    Text(exportPayload, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        )
+    }
+
     VaultScreenContent(
         uiState = uiState,
         securitySettings = securitySettings,
@@ -439,6 +591,9 @@ fun VaultScreen(
         },
         onClearRecycleBin = {
             clearRecycleConfirmVisible = true
+        },
+        onOpenImportExport = {
+            exportDialogVisible = true
         },
         onCopyField = { label, value ->
             clipboardManager.setText(AnnotatedString(value))
@@ -607,6 +762,7 @@ private fun VaultScreenContent(
     onBatchDelete: (List<String>) -> Unit,
     onRestoreEntry: (String) -> Unit,
     onClearRecycleBin: () -> Unit,
+    onOpenImportExport: () -> Unit,
     onCopyField: (String, String) -> Unit,
     onDeleteEntry: () -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
@@ -736,7 +892,8 @@ private fun VaultScreenContent(
                     onRequestLockSetup = onRequestLockSetup,
                     onRequestLockNow = onRequestLockNow,
                     onRequestChangePassword = onRequestChangePassword,
-                    onRequestDisableAppLock = onRequestDisableAppLock
+                    onRequestDisableAppLock = onRequestDisableAppLock,
+                    onOpenImportExport = onOpenImportExport
                 )
             }
 
@@ -1126,7 +1283,8 @@ private fun SecuritySettingsDialog(
     onRequestLockSetup: () -> Unit,
     onRequestLockNow: () -> Unit,
     onRequestChangePassword: () -> Unit,
-    onRequestDisableAppLock: () -> Unit
+    onRequestDisableAppLock: () -> Unit,
+    onOpenImportExport: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
