@@ -159,6 +159,7 @@ fun PasswordManagerApp() {
                     repository = repository,
                     initialSecuritySettings = securitySettings,
                     initialUiScale = uiScale,
+                    biometricAvailable = biometricAvailable,
                     onSecuritySettingsChange = { settings ->
                         scope.launch { preferencesStore.updateSecuritySettings(settings) }
                         if (!settings.appLockEnabled) {

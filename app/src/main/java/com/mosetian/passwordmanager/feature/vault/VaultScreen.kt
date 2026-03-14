@@ -152,6 +152,7 @@ fun VaultScreen(
     repository: VaultRepository = remember { InMemoryVaultRepository() },
     initialSecuritySettings: SecuritySettings = SecuritySettings(),
     initialUiScale: Float = 0.48f,
+    biometricAvailable: Boolean = false,
     onSecuritySettingsChange: (SecuritySettings) -> Unit = {},
     onUiScaleChange: (Float) -> Unit = {},
     onRequestLockSetup: () -> Unit = {},
@@ -518,6 +519,7 @@ fun VaultScreen(
         securitySettings = securitySettings,
         deletedEntries = uiState.deletedEntries,
         securityPanelVisible = securityPanelVisible,
+        biometricAvailable = biometricAvailable,
         uiScale = uiScale,
         loading = loading,
         detailLoading = detailPanelState.detailLoading,
@@ -747,6 +749,7 @@ private fun VaultScreenContent(
     securitySettings: SecuritySettings,
     deletedEntries: List<com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel>,
     securityPanelVisible: Boolean,
+    biometricAvailable: Boolean,
     uiScale: Float,
     loading: Boolean,
     detailLoading: Boolean,
@@ -912,7 +915,8 @@ private fun VaultScreenContent(
                     onRequestLockNow = onRequestLockNow,
                     onRequestChangePassword = onRequestChangePassword,
                     onRequestDisableAppLock = onRequestDisableAppLock,
-                    onOpenImportExport = onOpenImportExport
+                    onOpenImportExport = onOpenImportExport,
+                    biometricAvailable = biometricAvailable
                 )
             }
 
@@ -1303,7 +1307,8 @@ private fun SecuritySettingsDialog(
     onRequestLockNow: () -> Unit,
     onRequestChangePassword: () -> Unit,
     onRequestDisableAppLock: () -> Unit,
-    onOpenImportExport: () -> Unit
+    onOpenImportExport: () -> Unit,
+    biometricAvailable: Boolean
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1328,14 +1333,14 @@ private fun SecuritySettingsDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                SecuritySettingRow("启用应用锁", settings.appLockEnabled) { enabled ->
+                SecuritySettingRow("启用应用锁", settings.appLockEnabled, onCheckedChange = { enabled ->
                     if (enabled) {
                         onSettingsChange(settings.copy(appLockEnabled = true))
                         onRequestLockSetup()
                     } else {
                         onRequestDisableAppLock()
                     }
-                }
+                })
                 if (settings.appLockEnabled) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = onRequestChangePassword) {
@@ -1346,12 +1351,18 @@ private fun SecuritySettingsDialog(
                         }
                     }
                 }
-                SecuritySettingRow("启用生物解锁", settings.biometricUnlockEnabled) {
+                val biometricEnabled = settings.appLockEnabled && biometricAvailable
+                SecuritySettingRow("启用生物解锁", settings.biometricUnlockEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(biometricUnlockEnabled = it))
+                }, enabled = biometricEnabled)
+                if (!biometricAvailable) {
+                    Text("设备未配置生物识别", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (!settings.appLockEnabled) {
+                    Text("需先开启应用锁", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled) {
+                SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
-                }
+                })
                 if (settings.autoClearClipboardEnabled) {
                     Text("自动清理剪贴板时间（秒）: ${settings.autoClearClipboardSeconds}", style = MaterialTheme.typography.bodyMedium)
                     Slider(
@@ -1360,19 +1371,19 @@ private fun SecuritySettingsDialog(
                         valueRange = 5f..120f
                     )
                 }
-                SecuritySettingRow("自动填充（预留）", false) { }
-                SecuritySettingRow("阻止截图（预留）", settings.blockScreenshotsEnabled) {
+                SecuritySettingRow("自动填充（预留）", false, onCheckedChange = { _ -> })
+                SecuritySettingRow("阻止截图", settings.blockScreenshotsEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(blockScreenshotsEnabled = it))
-                }
-                SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled) {
+                })
+                SecuritySettingRow("隐藏敏感信息", settings.obscureSensitiveContentEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(obscureSensitiveContentEnabled = it))
-                }
-                SecuritySettingRow("深色模式", settings.darkModeEnabled) {
+                })
+                SecuritySettingRow("深色模式", settings.darkModeEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(darkModeEnabled = it))
-                }
-                SecuritySettingRow("切到后台自动锁定", settings.autoLockOnBackgroundEnabled) {
+                })
+                SecuritySettingRow("切到后台自动锁定", settings.autoLockOnBackgroundEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(autoLockOnBackgroundEnabled = it))
-                }
+                })
                 Text(
                     "页面密度（拖动条）: ${String.format("%.2f", uiScale)}x",
                     style = MaterialTheme.typography.bodyLarge
@@ -1408,14 +1419,15 @@ private fun SecuritySettingsDialog(
 private fun SecuritySettingRow(
     title: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = { if (enabled) onCheckedChange(it) }, enabled = enabled)
     }
 }
 
