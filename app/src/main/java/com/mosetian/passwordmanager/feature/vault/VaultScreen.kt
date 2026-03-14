@@ -956,6 +956,29 @@ private fun VaultTopBar(
             .fillMaxWidth()
             .padding(horizontal = layoutDensity.topBarHorizontal, vertical = layoutDensity.topBarVertical)
     ) {
+        if (selectedGroup?.id != GroupId.RecycleBin) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (selectionMode) {
+                    IconButton(onClick = onSelectAll) {
+                        Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Rounded.Close, contentDescription = "取消", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    IconButton(onClick = onToggleSelectionMode) {
+                        Icon(Icons.Rounded.DoneAll, contentDescription = "选择", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(selectedGroup?.name ?: "我的凭据", style = MaterialTheme.typography.headlineSmall)
@@ -976,21 +999,6 @@ private fun VaultTopBar(
             if (selectedGroup?.id == GroupId.RecycleBin) {
                 IconButton(onClick = onClearRecycleBin) {
                     Icon(Icons.Rounded.Delete, contentDescription = "清空回收站", tint = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                IconButton(onClick = onToggleSelectionMode) {
-                    Icon(Icons.Rounded.DoneAll, contentDescription = "选择", tint = MaterialTheme.colorScheme.primary)
-                }
-                if (selectionMode) {
-                    IconButton(onClick = onSelectAll) {
-                        Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
-                        Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = onClearSelection) {
-                        Icon(Icons.Rounded.Close, contentDescription = "取消", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
                 }
             }
         }
