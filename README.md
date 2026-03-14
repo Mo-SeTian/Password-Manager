@@ -225,3 +225,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 ![Screenshot_2026-03-13-21-54-34-886_com mosetian passwordmanager](https://github.com/user-attachments/assets/194b79cb-2a0f-4fe3-86f1-01dbc1123ac5)
 
 
+
+
+## v2.1.2
+- 调整：导入/导出将移入设置（待完成），主页多选模式默认开启，列表前置勾选框；移除右上角新增按钮，仅保留右下角悬浮按钮。

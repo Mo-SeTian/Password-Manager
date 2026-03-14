@@ -169,13 +169,8 @@ fun VaultScreen(
     var uiScale by remember(initialUiScale) { mutableStateOf(initialUiScale) }
     var deleteConfirmVisible by remember { mutableStateOf(false) }
     var pendingDeleteEntry by remember { mutableStateOf<EntryDetailUiModel?>(null) }
-    var selectionMode by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(true) }
     var clearRecycleConfirmVisible by remember { mutableStateOf(false) }
-    var exportDialogVisible by remember { mutableStateOf(false) }
-    var importDialogVisible by remember { mutableStateOf(false) }
-    var exportConfirmVisible by remember { mutableStateOf(false) }
-    var exportPayload by remember { mutableStateOf("" ) }
-    var importPayload by remember { mutableStateOf("" ) }
     var selectedEntryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var recycleBinVisible by remember { mutableStateOf(false) }
     var pendingUndoEntryId by remember { mutableStateOf<String?>(null) }
@@ -198,101 +193,6 @@ fun VaultScreen(
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
-
-    fun buildExportJson(entries: List<EntryUiModel>, details: Map<String, EntryDetailUiModel>): String {
-        val array = JSONArray()
-        entries.forEach { entry ->
-            val detail = details[entry.id]
-            val obj = JSONObject()
-            obj.put("id", entry.id)
-            obj.put("name", entry.name)
-            obj.put("iconEmoji", entry.iconEmoji)
-            obj.put("groupId", when (val group = entry.groupId) {
-                GroupId.All -> "all"
-                GroupId.Favorites -> "favorites"
-                GroupId.Recent -> "recent"
-                GroupId.Weak -> "weak"
-                GroupId.RecycleBin -> "recycle_bin"
-                is GroupId.Custom -> "custom:${group.value}"
-            })
-            obj.put("isFavorite", entry.isFavorite)
-            obj.put("isWeak", entry.isWeak)
-            obj.put("isRecent", entry.isRecent)
-            if (detail != null) {
-                obj.put("username", detail.username)
-                obj.put("password", detail.password)
-                obj.put("website", detail.website ?: JSONObject.NULL)
-                obj.put("note", detail.note ?: JSONObject.NULL)
-                val fields = JSONArray()
-                detail.customFields.forEach { field ->
-                    val f = JSONObject()
-                    f.put("label", field.label)
-                    f.put("value", field.value)
-                    f.put("isSecret", field.isSecret)
-                    f.put("copyable", field.copyable)
-                    fields.put(f)
-                }
-                obj.put("customFields", fields)
-            }
-            array.put(obj)
-        }
-        return array.toString(2)
-    }
-
-    fun parseGroupId(raw: String): GroupId {
-        return when {
-            raw == "all" -> GroupId.All
-            raw == "favorites" -> GroupId.Favorites
-            raw == "recent" -> GroupId.Recent
-            raw == "weak" -> GroupId.Weak
-            raw == "recycle_bin" -> GroupId.RecycleBin
-            raw.startsWith("custom:") -> GroupId.Custom(raw.removePrefix("custom:"))
-            else -> GroupId.All
-        }
-    }
-
-    fun parseJsonImport(raw: String): List<EntryDetailUiModel> {
-        val array = JSONArray(raw)
-        val list = mutableListOf<EntryDetailUiModel>()
-        for (i in 0 until array.length()) {
-            val obj = array.optJSONObject(i) ?: continue
-            val id = obj.optString("id")
-            val name = obj.optString("name")
-            val iconEmoji = obj.optString("iconEmoji", "🔐")
-            val username = obj.optString("username")
-            val password = obj.optString("password")
-            val website = obj.optString("website").takeIf { it.isNotBlank() && it != "null" }
-            val note = obj.optString("note").takeIf { it.isNotBlank() && it != "null" }
-            val fields = mutableListOf<CustomFieldUiModel>()
-            val fieldArray = obj.optJSONArray("customFields")
-            if (fieldArray != null) {
-                for (j in 0 until fieldArray.length()) {
-                    val field = fieldArray.optJSONObject(j) ?: continue
-                    fields.add(
-                        CustomFieldUiModel(
-                            label = field.optString("label"),
-                            value = field.optString("value"),
-                            isSecret = field.optBoolean("isSecret", false),
-                            copyable = field.optBoolean("copyable", true)
-                        )
-                    )
-                }
-            }
-            list.add(
-                EntryDetailUiModel(
-                    id = id,
-                    name = name,
-                    iconEmoji = iconEmoji,
-                    username = username,
-                    password = password,
-                    website = website,
-                    note = note,
-                    customFields = fields
-                )
-            )
-        }
-        return list
-    }
 
     suspend fun reloadVaultData() {
         loading = true
@@ -501,10 +401,6 @@ fun VaultScreen(
         onGroupEditorFormChange = { groupEditorForm = it },
         selectionMode = selectionMode,
         selectedEntryIds = selectedEntryIds,
-        onToggleSelectionMode = {
-            selectionMode = !selectionMode
-            if (!selectionMode) selectedEntryIds = emptySet()
-        },
         onToggleSelectEntry = { id ->
             selectedEntryIds = if (selectedEntryIds.contains(id)) selectedEntryIds - id else selectedEntryIds + id
         },
@@ -512,7 +408,6 @@ fun VaultScreen(
             selectedEntryIds = ids.toSet()
         },
         onClearSelection = {
-            selectionMode = false
             selectedEntryIds = emptySet()
         },
         onBatchDelete = { ids ->
@@ -521,7 +416,6 @@ fun VaultScreen(
                 repository.deleteEntries(ids)
                 reloadVaultData()
                 selectedEntryIds = emptySet()
-                selectionMode = false
                 val result = snackbarHostState.showSnackbar(message = "已批量移入回收站", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Short)
                 if (result == SnackbarResult.ActionPerformed) {
                     ids.forEach { repository.restoreEntry(it) }
@@ -539,9 +433,6 @@ fun VaultScreen(
         },
         onClearRecycleBin = {
             clearRecycleConfirmVisible = true
-        },
-        onOpenImportExport = {
-            exportDialogVisible = true
         },
         onCopyField = { label, value ->
             clipboardManager.setText(AnnotatedString(value))
@@ -610,71 +501,8 @@ fun VaultScreen(
         }
     )
 
-    if (exportDialogVisible) {
-        AlertDialog(
-            onDismissRequest = { exportDialogVisible = false },
-            confirmButton = { TextButton(onClick = { exportDialogVisible = false }) { Text("关闭") } },
-            title = { Text("导入 / 导出") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("导出将包含明文密码，请妥善保存。")
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TextButton(onClick = {
-                            exportPayload = buildExportJson(entries, detailCache)
-                            exportConfirmVisible = true
-                        }) { Text("导出 JSON") }
-                    }
-                    OutlinedTextField(
-                        value = importPayload,
-                        onValueChange = { importPayload = it },
-                        label = { Text("导入 JSON 内容") },
-                        minLines = 4,
-                        maxLines = 10,
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    TextButton(onClick = {
-                        val raw = importPayload.trim()
-                        if (raw.isNotBlank()) {
-                            val items = parseJsonImport(raw)
-                            scope.launch {
-                                items.forEach { detail ->
-                                    val entry = EntryUiModel(
-                                        id = detail.id,
-                                        name = detail.name,
-                                        iconEmoji = detail.iconEmoji,
-                                        groupId = GroupId.All,
-                                        isFavorite = false,
-                                        isWeak = detail.password.length in 1..6,
-                                        isRecent = true
-                                    )
-                                    repository.upsertEntry(entry)
-                                    repository.upsertEntryDetail(detail)
-                                }
-                                reloadVaultData()
-                                snackbarHostState.showSnackbar("已导入 ${items.size} 条凭据")
-                                importPayload = ""
-                            }
-                        }
-                    }) { Text("导入（覆盖）") }
-                }
-            }
-        )
-    }
-    if (exportConfirmVisible) {
-        AlertDialog(
-            onDismissRequest = { exportConfirmVisible = false },
-            confirmButton = { TextButton(onClick = { exportConfirmVisible = false }) { Text("完成") } },
-            title = { Text("导出结果") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("导出后密码为明文，请妥善保存。")
-                    SelectionContainer {
-                        Text(exportPayload, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        )
-    }
+
+
 
     if (deleteConfirmVisible) {
         DeleteEntryDialog(
@@ -766,14 +594,12 @@ private fun VaultScreenContent(
     onGroupEditorFormChange: (GroupEditorForm) -> Unit,
     selectionMode: Boolean,
     selectedEntryIds: Set<String>,
-    onToggleSelectionMode: () -> Unit,
     onToggleSelectEntry: (String) -> Unit,
     onSelectAllVisible: (List<String>) -> Unit,
     onClearSelection: () -> Unit,
     onBatchDelete: (List<String>) -> Unit,
     onRestoreEntry: (String) -> Unit,
     onClearRecycleBin: () -> Unit,
-    onOpenImportExport: () -> Unit,
     onCopyField: (String, String) -> Unit,
     onDeleteEntry: () -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
@@ -818,15 +644,12 @@ private fun VaultScreenContent(
                     onSearchQueryChange = onSearchQueryChange,
                     onToggleSearch = onToggleSearch,
                     onEntryClick = onEntryClick,
-                    onAddClick = onAddEntry,
-                    onToggleSelectionMode = onToggleSelectionMode,
-                    onToggleSelectEntry = onToggleSelectEntry,
+                                    onToggleSelectEntry = onToggleSelectEntry,
                     onSelectAllVisible = onSelectAllVisible,
                     onBatchDelete = onBatchDelete,
                     onClearSelection = onClearSelection,
                     onRestoreEntry = onRestoreEntry,
                     onClearRecycleBin = onClearRecycleBin,
-                    onOpenImportExport = onOpenImportExport,
                     layoutDensity = layoutDensity,
                     modifier = Modifier.weight(1f)
                 )
@@ -1015,15 +838,12 @@ private fun RightEntriesList(
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onEntryClick: (String) -> Unit,
-    onAddClick: () -> Unit,
-    onToggleSelectionMode: () -> Unit,
     onToggleSelectEntry: (String) -> Unit,
     onSelectAllVisible: (List<String>) -> Unit,
     onBatchDelete: (List<String>) -> Unit,
     onClearSelection: () -> Unit,
     onRestoreEntry: (String) -> Unit,
     onClearRecycleBin: () -> Unit,
-    onOpenImportExport: () -> Unit,
     layoutDensity: VaultLayoutDensity,
     modifier: Modifier = Modifier
 ) {
@@ -1044,13 +864,10 @@ private fun RightEntriesList(
                 selectedEntryIds = selectedEntryIds,
                 onSearchQueryChange = onSearchQueryChange,
                 onToggleSearch = onToggleSearch,
-                onAddClick = onAddClick,
-                onToggleSelectionMode = onToggleSelectionMode,
                 onSelectAll = { onSelectAllVisible(entries.map { it.id }) },
                 onBatchDelete = { onBatchDelete(entries.map { it.id }.filter { selectedEntryIds.contains(it) }) },
                 onClearSelection = onClearSelection,
                 onClearRecycleBin = onClearRecycleBin,
-                onOpenImportExport = onOpenImportExport,
                 layoutDensity = layoutDensity
             )
             if (loading) {
@@ -1081,7 +898,7 @@ private fun RightEntriesList(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 if (searchQuery.isBlank()) {
-                                    if (selectedGroup?.id == GroupId.RecycleBin) "回收站保留 3 天，可在详情中还原或右上角清空" else "你可以点击右上角的新增按钮创建第一条凭据"
+                                    if (selectedGroup?.id == GroupId.RecycleBin) "回收站保留 3 天，可在详情中还原或右上角清空" else "你可以点击右下角的新增按钮创建第一条凭据"
                                 } else "试试更短的关键词，或者换一个分组看看",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1117,13 +934,10 @@ private fun VaultTopBar(
     selectedEntryIds: Set<String>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
-    onAddClick: () -> Unit,
-    onToggleSelectionMode: () -> Unit,
     onSelectAll: () -> Unit,
     onBatchDelete: () -> Unit,
     onClearSelection: () -> Unit,
     onClearRecycleBin: () -> Unit,
-    onOpenImportExport: () -> Unit,
     layoutDensity: VaultLayoutDensity
 ) {
     Column(
@@ -1148,31 +962,19 @@ private fun VaultTopBar(
             IconButton(onClick = onToggleSearch) {
                 Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = MaterialTheme.colorScheme.primary)
             }
-            IconButton(onClick = onOpenImportExport) {
-                Icon(Icons.Rounded.MoreHoriz, contentDescription = "更多", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             if (selectedGroup?.id == GroupId.RecycleBin) {
                 IconButton(onClick = onClearRecycleBin) {
                     Icon(Icons.Rounded.Delete, contentDescription = "清空回收站", tint = MaterialTheme.colorScheme.error)
                 }
             } else {
-                IconButton(onClick = onToggleSelectionMode) {
-                    Icon(Icons.Rounded.DoneAll, contentDescription = "多选", tint = if (selectionMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onSelectAll) {
+                    Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
                 }
-                if (selectionMode) {
-                    IconButton(onClick = onSelectAll) {
-                        Icon(Icons.Rounded.DoneAll, contentDescription = "全选", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
-                        Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = onClearSelection) {
-                        Icon(Icons.Rounded.Close, contentDescription = "退出多选", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    IconButton(onClick = onAddClick) {
-                        Icon(Icons.Rounded.Add, contentDescription = "新增", tint = MaterialTheme.colorScheme.primary)
-                    }
+                IconButton(onClick = onBatchDelete, enabled = selectedEntryIds.isNotEmpty()) {
+                    Icon(Icons.Rounded.Delete, contentDescription = "批量删除", tint = if (selectedEntryIds.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onClearSelection) {
+                    Icon(Icons.Rounded.Close, contentDescription = "清空选择", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1204,14 +1006,12 @@ private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected:
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { if (selectionMode) onToggleSelect() else onClick() }
+                .clickable { onClick() }
                 .padding(horizontal = layoutDensity.listItemHorizontal, vertical = layoutDensity.listItemVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selectionMode) {
-                Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
-                Spacer(modifier = Modifier.width(10.dp))
-            }
+                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
+            Spacer(modifier = Modifier.width(10.dp))
             Surface(
                 modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(16.dp),
@@ -1349,7 +1149,6 @@ private fun SecuritySettingsDialog(
                 SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled) {
                     onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
                 }
-                SecuritySettingRow("自动填充（预留）", false) { }
                 SecuritySettingRow("阻止截图（预留）", settings.blockScreenshotsEnabled) {
                     onSettingsChange(settings.copy(blockScreenshotsEnabled = it))
                 }
