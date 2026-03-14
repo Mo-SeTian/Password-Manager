@@ -11,6 +11,8 @@ import com.mosetian.passwordmanager.feature.security.AppLockState
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import org.json.JSONObject
 
 private val Context.appPreferences by preferencesDataStore(name = "password_manager_prefs")
 
@@ -29,6 +31,7 @@ class PreferencesStore(private val context: Context) {
     private val appLockPasswordSaltKey = stringPreferencesKey("app_lock_password_salt")
     private val appLockPasswordAlgorithmKey = stringPreferencesKey("app_lock_password_algorithm")
     private val plaintextMigrationCompletedKey = booleanPreferencesKey("plaintext_migration_completed")
+    private val lastAutofillSelectionKey = stringPreferencesKey("last_autofill_selection")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -109,6 +112,25 @@ class PreferencesStore(private val context: Context) {
     suspend fun clearAllPreferences() {
         context.appPreferences.edit { prefs ->
             prefs.clear()
+        }
+    }
+
+    suspend fun getLastAutofillSelection(key: String): String? {
+        val raw = context.appPreferences.data.map { prefs -> prefs[lastAutofillSelectionKey]?.orEmpty() ?: "" }.first()
+        if (raw.isBlank()) return null
+        return try {
+            JSONObject(raw).optString(key).takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun setLastAutofillSelection(key: String, entryId: String) {
+        context.appPreferences.edit { prefs ->
+            val raw = prefs[lastAutofillSelectionKey]?.orEmpty() ?: ""
+            val json = try { JSONObject(raw) } catch (e: Exception) { JSONObject() }
+            json.put(key, entryId)
+            prefs[lastAutofillSelectionKey] = json.toString()
         }
     }
 }
