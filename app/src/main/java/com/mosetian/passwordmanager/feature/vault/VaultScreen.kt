@@ -85,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -94,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import com.mosetian.passwordmanager.data.vault.InMemoryVaultRepository
 import com.mosetian.passwordmanager.data.vault.VaultRepository
 import com.mosetian.passwordmanager.feature.security.SecuritySettings
+import com.mosetian.passwordmanager.data.local.PreferencesStore
 import com.mosetian.passwordmanager.feature.vault.model.CustomFieldUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryEditorForm
@@ -192,6 +194,8 @@ fun VaultScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val preferencesStore = remember(context) { PreferencesStore(context) }
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<EntryUiModel>>(emptyList()) }
     var detailCache by remember { mutableStateOf<Map<String, EntryDetailUiModel>>(emptyMap()) }
@@ -631,6 +635,22 @@ fun VaultScreen(
                 deleteConfirmVisible = true
             }
         },
+        onSetAutofillDefault = { detail: EntryDetailUiModel ->
+            scope.launch {
+                val website = detail.website
+                if (website.isNullOrBlank()) {
+                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项")
+                } else {
+                    val domain = try {
+                        java.net.URI(website).host ?: website
+                    } catch (e: Exception) {
+                        website
+                    }
+                    preferencesStore.setLastAutofillSelection(domain, detail.id)
+                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项")
+                }
+            }
+        },
         onSaveEntry = { form ->
             scope.launch {
                 val targetGroup = form.groupId
@@ -787,6 +807,7 @@ private fun VaultScreenContent(
     onOpenImportExport: () -> Unit,
     onCopyField: (String, String) -> Unit,
     onDeleteEntry: () -> Unit,
+    onSetAutofillDefault: (EntryDetailUiModel) -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
     onSaveGroup: (GroupEditorForm) -> Unit
 ) {
@@ -879,6 +900,7 @@ private fun VaultScreenContent(
                             onDelete = onDeleteEntry,
                             onRestore = if (uiState.selectedGroup == GroupId.RecycleBin) { { onRestoreEntry(uiState.selectedEntry.id) } } else null,
                             onCopy = onCopyField,
+                            onSetAutofillDefault = onSetAutofillDefault,
                             obscureSensitiveContent = securitySettings.obscureSensitiveContentEnabled
                         )
                     }
@@ -1234,6 +1256,7 @@ private fun EntryDetailOverlay(
     onDelete: () -> Unit,
     onRestore: (() -> Unit)?,
     onCopy: (String, String) -> Unit,
+    onSetAutofillDefault: (EntryDetailUiModel) -> Unit,
     obscureSensitiveContent: Boolean
 ) {
     Box(

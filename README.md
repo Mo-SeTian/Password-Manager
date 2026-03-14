@@ -238,6 +238,7 @@ app/src/main/java/com/mosetian/passwordmanager/
 
 
 ## v2.1.3
+- App 内入口：详情页新增“设为自动填充默认项”。
 - 自动填充：新增系统级 Autofill Service，支持浏览器/常见 App，手动选择并记住上次选择。
 - 后台自动锁定策略优化：支持更短锁定延迟（立即/30s/1min）设置。
 - 生物识别开关与应用锁关联：仅在设备可用且已开启应用锁时可启用。
