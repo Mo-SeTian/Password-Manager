@@ -10,6 +10,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -651,6 +653,23 @@ fun VaultScreen(
                 }
             }
         },
+        onSetAutofillDefaultByEntryId = { entryId ->
+            scope.launch {
+                val detail = repository.getEntryDetail(entryId)
+                val website = detail?.website
+                if (detail == null || website.isNullOrBlank()) {
+                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项")
+                } else {
+                    val domain = try {
+                        java.net.URI(website).host ?: website
+                    } catch (e: Exception) {
+                        website
+                    }
+                    preferencesStore.setLastAutofillSelection(domain, detail.id)
+                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项")
+                }
+            }
+        },
         onSaveEntry = { form ->
             scope.launch {
                 val targetGroup = form.groupId
@@ -808,6 +827,7 @@ private fun VaultScreenContent(
     onCopyField: (String, String) -> Unit,
     onDeleteEntry: () -> Unit,
     onSetAutofillDefault: (EntryDetailUiModel) -> Unit,
+    onSetAutofillDefaultByEntryId: (String) -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
     onSaveGroup: (GroupEditorForm) -> Unit
 ) {
@@ -853,6 +873,7 @@ private fun VaultScreenContent(
                     onEntryClick = onEntryClick,
                     onToggleSelectEntry = onToggleSelectEntry,
                     onSelectAllVisible = onSelectAllVisible,
+                    onSetAutofillDefaultByEntryId = onSetAutofillDefaultByEntryId,
                     onBatchDelete = onBatchDelete,
                     onClearSelection = onClearSelection,
                     onRestoreEntry = onRestoreEntry,
@@ -1055,6 +1076,7 @@ private fun RightEntriesList(
     onClearSelection: () -> Unit,
     onRestoreEntry: (String) -> Unit,
     onClearRecycleBin: () -> Unit,
+    onSetAutofillDefaultByEntryId: (String) -> Unit,
     layoutDensity: VaultLayoutDensity,
     modifier: Modifier = Modifier
 ) {
@@ -1127,6 +1149,7 @@ private fun RightEntriesList(
                             selected = selectedEntryIds.contains(entry.id),
                             onToggleSelect = { onToggleSelectEntry(entry.id) },
                             onClick = { onEntryClick(entry.id) },
+                            onLongPress = { onSetAutofillDefaultByEntryId(entry.id) },
                             layoutDensity = layoutDensity
                         )
                     }
@@ -1211,7 +1234,8 @@ private fun VaultTopBar(
 }
 
 @Composable
-private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected: Boolean, onToggleSelect: () -> Unit, onClick: () -> Unit, layoutDensity: VaultLayoutDensity) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected: Boolean, onToggleSelect: () -> Unit, onClick: () -> Unit, onLongPress: () -> Unit, layoutDensity: VaultLayoutDensity) {
     val elevation by animateDpAsState(targetValue = 4.dp, label = "entry_elevation")
     Surface(
         modifier = Modifier
@@ -1225,7 +1249,7 @@ private fun EntryNameCard(entry: EntryUiModel, selectionMode: Boolean, selected:
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { if (selectionMode) onToggleSelect() else onClick() }
+                .combinedClickable(onClick = { if (selectionMode) onToggleSelect() else onClick() }, onLongClick = onLongPress)
                 .padding(horizontal = layoutDensity.listItemHorizontal, vertical = layoutDensity.listItemVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
