@@ -32,6 +32,7 @@ class PreferencesStore(private val context: Context) {
     private val appLockPasswordAlgorithmKey = stringPreferencesKey("app_lock_password_algorithm")
     private val plaintextMigrationCompletedKey = booleanPreferencesKey("plaintext_migration_completed")
     private val lastAutofillSelectionKey = stringPreferencesKey("last_autofill_selection")
+    private val lastAutofillUsageKey = stringPreferencesKey("last_autofill_usage")
 
     val darkModeEnabled: Flow<Boolean> = context.appPreferences.data.map { prefs ->
         prefs[darkModeKey] ?: true
@@ -133,4 +134,25 @@ class PreferencesStore(private val context: Context) {
             prefs[lastAutofillSelectionKey] = json.toString()
         }
     }
+
+    suspend fun getAutofillUsageMap(): Map<String, Long> {
+        val raw = context.appPreferences.data.map { prefs -> prefs[lastAutofillUsageKey]?.orEmpty() ?: "" }.first()
+        if (raw.isBlank()) return emptyMap()
+        return try {
+            val json = JSONObject(raw)
+            json.keys().asSequence().associateWith { key -> json.optLong(key, 0L) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    suspend fun setAutofillUsage(entryId: String, timestamp: Long) {
+        context.appPreferences.edit { prefs ->
+            val raw = prefs[lastAutofillUsageKey]?.orEmpty() ?: ""
+            val json = try { JSONObject(raw) } catch (e: Exception) { JSONObject() }
+            json.put(entryId, timestamp)
+            prefs[lastAutofillUsageKey] = json.toString()
+        }
+    }
+
 }

@@ -51,6 +51,7 @@ class PasswordManagerAutofillService : AutofillService() {
                 }
             }
             val preferencesStore = PreferencesStore(context)
+            val usageMap = preferencesStore.getAutofillUsageMap()
             val keys = extractAutofillKeys(structure, fields)
             var lastEntryId: String? = null
             for (key in keys) {
@@ -65,7 +66,9 @@ class PasswordManagerAutofillService : AutofillService() {
                 }
                 if (matched.isNotEmpty()) matched else details
             } else details
-            val sorted = filtered.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }.thenBy { it.name })
+            val sorted = filtered.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }
+                .thenByDescending { usageMap[it.id] ?: 0L }
+                .thenBy { it.name })
             if (sorted.isEmpty()) {
                 callback.onSuccess(null)
                 return@runBlocking
@@ -111,6 +114,7 @@ class PasswordManagerAutofillService : AutofillService() {
                         val prefs = PreferencesStore(this@PasswordManagerAutofillService)
                         val keys = extractAutofillKeys(structure, fields)
                         keys.forEach { key -> prefs.setLastAutofillSelection(key, matched.id) }
+                        prefs.setAutofillUsage(matched.id, System.currentTimeMillis())
                     }
                 }
             }
