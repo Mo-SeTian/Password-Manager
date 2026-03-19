@@ -52,14 +52,15 @@ class PasswordManagerAutofillService : AutofillService() {
             }
             val preferencesStore = PreferencesStore(context)
             val usageMap = preferencesStore.getAutofillUsageMap()
-            val keys = extractAutofillKeys(structure, fields)
+            val domainKey = fields.webDomain
+            val packageKey = fields.packageName
+            val candidateKeys = listOfNotNull(domainKey, packageKey).distinct()
             var lastEntryId: String? = null
-            for (key in keys) {
+            for (key in candidateKeys) {
                 lastEntryId = preferencesStore.getLastAutofillSelection(key)
                 if (!lastEntryId.isNullOrBlank()) break
             }
-            val domainKey = keys.firstOrNull { it.contains(".") }
-            val filtered = if (domainKey != null) {
+            val filtered = if (!domainKey.isNullOrBlank()) {
                 val matched = details.filter { detail ->
                     val host = extractHost(detail.website)
                     host != null && host.contains(domainKey, ignoreCase = true)
@@ -112,7 +113,7 @@ class PasswordManagerAutofillService : AutofillService() {
                     }
                     if (matched != null) {
                         val prefs = PreferencesStore(this@PasswordManagerAutofillService)
-                        val keys = extractAutofillKeys(structure, fields)
+                        val keys = buildAutofillKeys(fields)
                         keys.forEach { key -> prefs.setLastAutofillSelection(key, matched.id) }
                         prefs.setAutofillUsage(matched.id, System.currentTimeMillis())
                     }
@@ -125,7 +126,8 @@ class PasswordManagerAutofillService : AutofillService() {
     private data class ParsedFields(
         val usernameId: AutofillId?,
         val passwordId: AutofillId?,
-        val autofillKey: String
+        val packageName: String,
+        val webDomain: String?
     )
 
     private data class ParsedValues(val username: String?, val password: String?)
@@ -133,15 +135,16 @@ class PasswordManagerAutofillService : AutofillService() {
     private fun parseFields(structure: AssistStructure): ParsedFields {
         val usernameIds = mutableListOf<AutofillId>()
         val passwordIds = mutableListOf<AutofillId>()
-        var key = structure.activityComponent?.packageName ?: "unknown"
+        val packageName = structure.activityComponent?.packageName ?: "unknown"
+        var webDomain: String? = null
         val windowCount = structure.windowNodeCount
         for (i in 0 until windowCount) {
             val windowNode = structure.getWindowNodeAt(i)
             val root = windowNode.rootViewNode
             traverse(root) { node ->
                 val hints = node.autofillHints?.toList().orEmpty()
-                if (node.webDomain != null) {
-                    key = node.webDomain.toString()
+                if (node.webDomain != null && !node.webDomain.isNullOrBlank()) {
+                    webDomain = node.webDomain.toString()
                 }
                 if (hints.any { it.equals(View.AUTOFILL_HINT_USERNAME, true) || it.equals(View.AUTOFILL_HINT_EMAIL_ADDRESS, true) }) {
                     node.autofillId?.let { usernameIds.add(it) }
@@ -151,7 +154,7 @@ class PasswordManagerAutofillService : AutofillService() {
                 }
             }
         }
-        return ParsedFields(usernameIds.firstOrNull(), passwordIds.firstOrNull(), key)
+        return ParsedFields(usernameIds.firstOrNull(), passwordIds.firstOrNull(), packageName, webDomain)
     }
 
     private fun extractValues(structure: AssistStructure, fields: ParsedFields): ParsedValues {
@@ -174,12 +177,8 @@ class PasswordManagerAutofillService : AutofillService() {
     }
 
 
-    private fun extractAutofillKeys(structure: AssistStructure, fields: ParsedFields): List<String> {
-        val keys = mutableListOf<String>()
-        val packageName = structure.activityComponent?.packageName
-        if (!packageName.isNullOrBlank()) keys.add(packageName)
-        if (!fields.autofillKey.isBlank()) keys.add(fields.autofillKey)
-        return keys.distinct()
+    private fun buildAutofillKeys(fields: ParsedFields): List<String> {
+        return listOfNotNull(fields.webDomain, fields.packageName).distinct()
     }
 
     private fun extractHost(value: String?): String? {
