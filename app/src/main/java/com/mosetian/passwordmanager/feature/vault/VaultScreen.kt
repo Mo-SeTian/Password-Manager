@@ -641,7 +641,7 @@ fun VaultScreen(
             scope.launch {
                 val website = detail.website
                 if (website.isNullOrBlank()) {
-                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项")
+                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项（请先填写网址）")
                 } else {
                     val domain = try {
                         java.net.URI(website).host ?: website
@@ -649,7 +649,7 @@ fun VaultScreen(
                         website
                     }
                     preferencesStore.setLastAutofillSelection(domain, detail.id)
-                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项")
+                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项，将优先自动填充")
                 }
             }
         },
@@ -658,7 +658,7 @@ fun VaultScreen(
                 val detail = repository.getEntryDetail(entryId)
                 val website = detail?.website
                 if (detail == null || website.isNullOrBlank()) {
-                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项")
+                    snackbarHostState.showSnackbar("缺少网址，无法设为自动填充默认项（请先填写网址）")
                 } else {
                     val domain = try {
                         java.net.URI(website).host ?: website
@@ -666,7 +666,7 @@ fun VaultScreen(
                         website
                     }
                     preferencesStore.setLastAutofillSelection(domain, detail.id)
-                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项")
+                    snackbarHostState.showSnackbar("已设为 ${domain} 默认填充项，将优先自动填充")
                 }
             }
         },
