@@ -60,14 +60,15 @@ class PasswordManagerAutofillService : AutofillService() {
                 lastEntryId = preferencesStore.getLastAutofillSelection(key)
                 if (!lastEntryId.isNullOrBlank()) break
             }
-            val filtered = if (!domainKey.isNullOrBlank()) {
+            val matchResult = if (!domainKey.isNullOrBlank()) {
                 val matched = details.filter { detail ->
                     val host = extractHost(detail.website)
                     host != null && matchesDomain(host, domainKey)
                 }
                 if (matched.isNotEmpty()) matched else details
             } else details
-            val sorted = filtered.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }
+            val manualSelectionMode = !domainKey.isNullOrBlank() && matchResult.size == details.size
+            val sorted = matchResult.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }
                 .thenByDescending { usageMap[it.id] ?: 0L }
                 .thenBy { it.name })
             if (sorted.isEmpty()) {
@@ -77,7 +78,8 @@ class PasswordManagerAutofillService : AutofillService() {
             val responseBuilder = FillResponse.Builder()
             sorted.forEach { detail ->
                 val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
-                presentation.setTextViewText(android.R.id.text1, detail.name)
+                val label = if (manualSelectionMode) "手动 · ${detail.name}" else detail.name
+                presentation.setTextViewText(android.R.id.text1, label)
                 val dataset = Dataset.Builder(presentation).apply {
                     fields.usernameId?.let { setValue(it, AutofillValue.forText(detail.username), presentation) }
                     fields.passwordId?.let { setValue(it, AutofillValue.forText(detail.password), presentation) }
