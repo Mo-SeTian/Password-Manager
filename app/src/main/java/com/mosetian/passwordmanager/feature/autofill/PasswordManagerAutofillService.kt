@@ -63,7 +63,7 @@ class PasswordManagerAutofillService : AutofillService() {
             val filtered = if (!domainKey.isNullOrBlank()) {
                 val matched = details.filter { detail ->
                     val host = extractHost(detail.website)
-                    host != null && host.contains(domainKey, ignoreCase = true)
+                    host != null && matchesDomain(host, domainKey)
                 }
                 if (matched.isNotEmpty()) matched else details
             } else details
@@ -189,6 +189,17 @@ class PasswordManagerAutofillService : AutofillService() {
         } catch (e: Exception) {
             value
         }
+    }
+
+    private fun normalizeDomain(value: String): String {
+        return value.lowercase().removePrefix("www.")
+    }
+
+    private fun matchesDomain(host: String, domain: String): Boolean {
+        val normalizedHost = normalizeDomain(host)
+        val normalizedDomain = normalizeDomain(domain)
+        if (normalizedHost == normalizedDomain) return true
+        return normalizedHost.endsWith(".$normalizedDomain")
     }
 
     private fun traverse(node: AssistStructure.ViewNode, onVisit: (AssistStructure.ViewNode) -> Unit) {
