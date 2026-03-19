@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class PasswordManagerAutofillService : AutofillService() {
+    private val lastFillContexts = mutableMapOf<String, List<String>>()
     override fun onFillRequest(
         request: FillRequest,
         cancellationSignal: CancellationSignal,
@@ -68,6 +69,9 @@ class PasswordManagerAutofillService : AutofillService() {
                 if (matched.isNotEmpty()) matched else details
             } else details
             val manualSelectionMode = !domainKey.isNullOrBlank() && matchResult.size == details.size
+            if (candidateKeys.isNotEmpty()) {
+                lastFillContexts[candidateKeys.first()] = candidateKeys
+            }
             val sorted = matchResult.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }
                 .thenByDescending { usageMap[it.id] ?: 0L }
                 .thenBy { it.name })
@@ -75,7 +79,11 @@ class PasswordManagerAutofillService : AutofillService() {
                 callback.onSuccess(null)
                 return@runBlocking
             }
-            val responseBuilder = FillResponse.Builder()
+            val clientState = android.os.Bundle().apply {
+                putString("packageName", fields.packageName)
+                putStringArrayList("candidateKeys", ArrayList(candidateKeys))
+            }
+            val responseBuilder = FillResponse.Builder().setClientState(clientState)
             sorted.forEach { detail ->
                 val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
                 val label = if (manualSelectionMode) "手动 · ${detail.name}" else detail.name
@@ -115,8 +123,12 @@ class PasswordManagerAutofillService : AutofillService() {
                     }
                     if (matched != null) {
                         val prefs = PreferencesStore(this@PasswordManagerAutofillService)
-                        val keys = buildAutofillKeys(fields)
+                        val keys = buildAutofillKeys(fields).toMutableList()
+                        lastFillContexts[fields.packageName]?.let { cached ->
+                            cached.forEach { key -> if (!keys.contains(key)) keys.add(key) }
+                        }
                         keys.forEach { key -> prefs.setLastAutofillSelection(key, matched.id) }
+                        lastFillContexts.remove(fields.packageName)
                         prefs.setAutofillUsage(matched.id, System.currentTimeMillis())
                     }
                 }
