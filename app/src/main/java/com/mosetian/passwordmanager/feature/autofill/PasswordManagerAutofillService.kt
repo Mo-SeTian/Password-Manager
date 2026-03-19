@@ -86,7 +86,7 @@ class PasswordManagerAutofillService : AutofillService() {
             val responseBuilder = FillResponse.Builder().setClientState(clientState)
             sorted.forEach { detail ->
                 val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
-                val label = if (manualSelectionMode) "手动 · ${detail.name}" else detail.name
+                val label = if (manualSelectionMode) "手动 · ${detail.name}（记住）" else detail.name
                 presentation.setTextViewText(android.R.id.text1, label)
                 val dataset = Dataset.Builder(presentation).apply {
                     fields.usernameId?.let { setValue(it, AutofillValue.forText(detail.username), presentation) }
