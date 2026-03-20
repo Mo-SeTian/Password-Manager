@@ -310,12 +310,11 @@ fun VaultScreen(
         }
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
-            val id = obj.optString("id")
-            val name = obj.optString("name")
+            val id = obj.optString("id").ifBlank { ((System.currentTimeMillis() % 100000) + i).toString() }
+            val name = obj.optString("name").ifBlank { "未命名凭据" }
             val icon = obj.optString("iconEmoji")
             val username = obj.optString("username")
             val password = obj.optString("password")
-            if (id.isBlank() || name.isBlank()) continue
             val website = obj.opt("website")?.takeIf { it != JSONObject.NULL }?.toString()
             val note = obj.opt("note")?.takeIf { it != JSONObject.NULL }?.toString()
             val fields = mutableListOf<CustomFieldUiModel>()
