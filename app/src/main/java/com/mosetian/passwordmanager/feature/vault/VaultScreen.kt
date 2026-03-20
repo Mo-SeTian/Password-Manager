@@ -519,56 +519,60 @@ fun VaultScreen(
                         maxLines = 10,
                         shape = RoundedCornerShape(16.dp)
                     )
-                    TextButton(onClick = {
-                        val raw = importPayload.trim()
-                        if (raw.isBlank()) {
-                            scope.launch { snackbarHostState.showSnackbar("导入内容为空") }
-                            return@TextButton
-                        }
-                        scope.launch {
-                            try {
-                                val payload = parseJsonImport(raw)
-                                if (payload.items.isEmpty()) {
-                                    snackbarHostState.showSnackbar("导入内容为空")
-                                } else {
-                                    payload.customGroups.forEach { group ->
-                                        repository.addGroup(group)
-                                    }
-                                    payload.items.forEach { item ->
-                                        val detail = item.detail
-                                        val entry = EntryUiModel(
-                                            id = detail.id,
-                                            name = detail.name,
-                                            iconEmoji = detail.iconEmoji,
-                                            groupId = item.groupId,
-                                            isFavorite = item.groupId == GroupId.Favorites,
-                                            isWeak = detail.password.length in 1..6,
-                                            isRecent = true
-                                        )
-                                        val entryDetail = EntryDetailUiModel(
-                                            id = detail.id,
-                                            name = detail.name,
-                                            iconEmoji = detail.iconEmoji,
-                                            username = detail.username,
-                                            password = detail.password,
-                                            website = detail.website,
-                                            note = detail.note,
-                                            customFields = detail.customFields
-                                        )
-                                        repository.upsertEntry(entry)
-                                        repository.upsertEntryDetail(entryDetail)
-                                    }
-                                    reloadVaultData()
-                                    snackbarHostState.showSnackbar("导入完成（已覆盖）")
-                                    exportDialogVisible = false
-                                }
-                            } catch (e: IllegalArgumentException) {
-                                snackbarHostState.showSnackbar("导入失败：不支持的版本")
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("导入失败：格式不正确")
+                    Text("支持旧版数组或新版带 version 的 JSON", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(onClick = { importPayload = "" }) { Text("清空") }
+                        TextButton(onClick = {
+                            val raw = importPayload.trim()
+                            if (raw.isBlank()) {
+                                scope.launch { snackbarHostState.showSnackbar("导入内容为空") }
+                                return@TextButton
                             }
-                        }
-                    }) { Text("导入") }
+                            scope.launch {
+                                try {
+                                    val payload = parseJsonImport(raw)
+                                    if (payload.items.isEmpty()) {
+                                        snackbarHostState.showSnackbar("导入内容为空")
+                                    } else {
+                                        payload.customGroups.forEach { group ->
+                                            repository.addGroup(group)
+                                        }
+                                        payload.items.forEach { item ->
+                                            val detail = item.detail
+                                            val entry = EntryUiModel(
+                                                id = detail.id,
+                                                name = detail.name,
+                                                iconEmoji = detail.iconEmoji,
+                                                groupId = item.groupId,
+                                                isFavorite = item.groupId == GroupId.Favorites,
+                                                isWeak = detail.password.length in 1..6,
+                                                isRecent = true
+                                            )
+                                            val entryDetail = EntryDetailUiModel(
+                                                id = detail.id,
+                                                name = detail.name,
+                                                iconEmoji = detail.iconEmoji,
+                                                username = detail.username,
+                                                password = detail.password,
+                                                website = detail.website,
+                                                note = detail.note,
+                                                customFields = detail.customFields
+                                            )
+                                            repository.upsertEntry(entry)
+                                            repository.upsertEntryDetail(entryDetail)
+                                        }
+                                        reloadVaultData()
+                                        snackbarHostState.showSnackbar("导入完成（已覆盖）")
+                                        exportDialogVisible = false
+                                    }
+                                } catch (e: IllegalArgumentException) {
+                                    snackbarHostState.showSnackbar("导入失败：不支持的版本")
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar("导入失败：格式不正确")
+                                }
+                            }
+                        }) { Text("导入") }
+                    }
                 }
             }
         )
