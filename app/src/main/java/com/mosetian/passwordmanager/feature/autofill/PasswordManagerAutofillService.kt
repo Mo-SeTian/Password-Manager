@@ -69,6 +69,8 @@ class PasswordManagerAutofillService : AutofillService() {
                 if (matched.isNotEmpty()) matched else details
             } else details
             val manualSelectionMode = !domainKey.isNullOrBlank() && matchResult.size == details.size
+            val grouped = matchResult.groupBy { it.name.lowercase() }
+            val hasDuplicates = grouped.values.any { it.size > 1 }
             if (candidateKeys.isNotEmpty()) {
                 lastFillContexts[candidateKeys.first()] = candidateKeys
             }
@@ -88,7 +90,7 @@ class PasswordManagerAutofillService : AutofillService() {
                 val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2)
                 val label = if (manualSelectionMode) "手动 · ${detail.name}（记住）" else detail.name
                 presentation.setTextViewText(android.R.id.text1, label)
-                val subtitle = buildAutofillSubtitle(detail, domainKey, manualSelectionMode, detail.id == lastEntryId)
+                val subtitle = buildAutofillSubtitle(detail, domainKey, manualSelectionMode, detail.id == lastEntryId, hasDuplicates)
                 presentation.setTextViewText(android.R.id.text2, subtitle)
                 val dataset = Dataset.Builder(presentation).apply {
                     fields.usernameId?.let { setValue(it, AutofillValue.forText(detail.username), presentation) }
@@ -218,7 +220,7 @@ class PasswordManagerAutofillService : AutofillService() {
         return normalizedHost.endsWith(".$normalizedDomain")
     }
 
-    private fun buildAutofillSubtitle(detail: EntryDetailUiModel, domainKey: String?, manualMode: Boolean, isDefault: Boolean): String {
+    private fun buildAutofillSubtitle(detail: EntryDetailUiModel, domainKey: String?, manualMode: Boolean, isDefault: Boolean, showUsername: Boolean): String {
         val host = extractHost(detail.website)
         val tag = when {
             manualMode -> "手动选择"
@@ -227,7 +229,8 @@ class PasswordManagerAutofillService : AutofillService() {
         }
         val hostText = if (!host.isNullOrBlank()) "@${normalizeDomain(host)}" else ""
         val matchHint = if (!domainKey.isNullOrBlank() && !host.isNullOrBlank() && matchesDomain(host, domainKey)) "匹配域名" else ""
-        return listOf(tag, hostText, matchHint).filter { it.isNotBlank() }.joinToString(" · ")
+        val usernameHint = if (showUsername && detail.username.isNotBlank()) "账号:${detail.username}" else ""
+        return listOf(tag, hostText, matchHint, usernameHint).filter { it.isNotBlank() }.joinToString(" · ")
     }
 
     private fun traverse(node: AssistStructure.ViewNode, onVisit: (AssistStructure.ViewNode) -> Unit) {
