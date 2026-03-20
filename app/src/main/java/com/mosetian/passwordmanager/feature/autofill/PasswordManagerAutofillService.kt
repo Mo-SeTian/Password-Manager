@@ -85,9 +85,11 @@ class PasswordManagerAutofillService : AutofillService() {
             }
             val responseBuilder = FillResponse.Builder().setClientState(clientState)
             sorted.forEach { detail ->
-                val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
+                val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2)
                 val label = if (manualSelectionMode) "手动 · ${detail.name}（记住）" else detail.name
                 presentation.setTextViewText(android.R.id.text1, label)
+                val subtitle = buildAutofillSubtitle(detail, domainKey, manualSelectionMode, detail.id == lastEntryId)
+                presentation.setTextViewText(android.R.id.text2, subtitle)
                 val dataset = Dataset.Builder(presentation).apply {
                     fields.usernameId?.let { setValue(it, AutofillValue.forText(detail.username), presentation) }
                     fields.passwordId?.let { setValue(it, AutofillValue.forText(detail.password), presentation) }
@@ -214,6 +216,18 @@ class PasswordManagerAutofillService : AutofillService() {
         val normalizedDomain = normalizeDomain(domain)
         if (normalizedHost == normalizedDomain) return true
         return normalizedHost.endsWith(".$normalizedDomain")
+    }
+
+    private fun buildAutofillSubtitle(detail: EntryDetailUiModel, domainKey: String?, manualMode: Boolean, isDefault: Boolean): String {
+        val host = extractHost(detail.website)
+        val tag = when {
+            manualMode -> "手动选择"
+            isDefault -> "默认项"
+            else -> ""
+        }
+        val hostText = if (!host.isNullOrBlank()) "@${normalizeDomain(host)}" else ""
+        val matchHint = if (!domainKey.isNullOrBlank() && !host.isNullOrBlank() && matchesDomain(host, domainKey)) "匹配域名" else ""
+        return listOf(tag, hostText, matchHint).filter { it.isNotBlank() }.joinToString(" · ")
     }
 
     private fun traverse(node: AssistStructure.ViewNode, onVisit: (AssistStructure.ViewNode) -> Unit) {
