@@ -32,8 +32,9 @@ import com.mosetian.passwordmanager.feature.security.SecuritySettings
 import com.mosetian.passwordmanager.feature.vault.VaultScreen
 import com.mosetian.passwordmanager.ui.theme.PasswordManagerTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -73,23 +74,33 @@ fun PasswordManagerApp() {
         biometricAvailable = componentActivity != null && biometricAuthController.canAuthenticate()
     }
 
-    DisposableEffect(lifecycleOwner, appLockState.enabled, securitySettings.autoLockOnBackgroundEnabled, unlocked) {
+    var autoLockJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(lifecycleOwner, appLockState.enabled, securitySettings.autoLockOnBackgroundEnabled, unlocked, securitySettings.autoLockDelaySeconds) {
         val observer = LifecycleEventObserver { _, event ->
-            if (
-                event == Lifecycle.Event.ON_STOP &&
-                appLockState.enabled &&
-                securitySettings.autoLockOnBackgroundEnabled &&
-                unlocked
-            ) {
-                val delaySeconds = securitySettings.autoLockDelaySeconds
-                if (delaySeconds <= 0) {
-                    unlocked = false
-                } else {
-                    scope.launch {
-                        delay(delaySeconds * 1000L)
-                        unlocked = false
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    if (
+                        appLockState.enabled &&
+                        securitySettings.autoLockOnBackgroundEnabled &&
+                        unlocked
+                    ) {
+                        val delaySeconds = securitySettings.autoLockDelaySeconds
+                        autoLockJob?.cancel()
+                        if (delaySeconds <= 0) {
+                            unlocked = false
+                        } else {
+                            autoLockJob = scope.launch {
+                                delay(delaySeconds * 1000L)
+                                unlocked = false
+                            }
+                        }
                     }
                 }
+                Lifecycle.Event.ON_START -> {
+                    autoLockJob?.cancel()
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
