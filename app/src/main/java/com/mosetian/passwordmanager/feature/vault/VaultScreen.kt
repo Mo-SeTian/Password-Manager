@@ -206,6 +206,9 @@ fun VaultScreen(
     var loading by remember { mutableStateOf(true) }
 
 
+    data class ImportItem(val detail: EntryDetailUiModel, val groupId: GroupId)
+    data class ImportPayload(val items: List<ImportItem>, val customGroups: List<GroupUiModel>)
+
     fun buildExportJson(entries: List<EntryUiModel>, details: Map<String, EntryDetailUiModel>): String {
         val array = JSONArray()
         entries.forEach { entry ->
@@ -241,12 +244,65 @@ fun VaultScreen(
             }
             array.put(obj)
         }
-        return array.toString(2)
+        val groupsArray = JSONArray()
+        customGroups.forEach { group ->
+            val g = JSONObject()
+            g.put("key", (group.id as? GroupId.Custom)?.value ?: "")
+            g.put("name", group.name)
+            groupsArray.put(g)
+        }
+        val wrapper = JSONObject()
+        wrapper.put("version", 1)
+        wrapper.put("entries", array)
+        wrapper.put("customGroups", groupsArray)
+        wrapper.put("exportedAt", System.currentTimeMillis())
+        return wrapper.toString(2)
     }
 
-    fun parseJsonImport(raw: String): List<EntryDetailUiModel> {
-        val array = JSONArray(raw)
-        val list = mutableListOf<EntryDetailUiModel>()
+    fun parseGroupId(raw: String): GroupId {
+        return when {
+            raw.startsWith("custom:") -> GroupId.Custom(raw.removePrefix("custom:").ifBlank { "custom" })
+            raw == "favorites" -> GroupId.Favorites
+            raw == "recent" -> GroupId.Recent
+            raw == "weak" -> GroupId.Weak
+            raw == "recycle_bin" -> GroupId.RecycleBin
+            else -> GroupId.All
+        }
+    }
+
+    fun parseJsonImport(raw: String): ImportPayload {
+        val customGroups = mutableListOf<GroupUiModel>()
+        val items = mutableListOf<ImportItem>()
+        val trimmed = raw.trim()
+        val array = if (trimmed.startsWith("[")) {
+            JSONArray(trimmed)
+        } else {
+            val obj = JSONObject(trimmed)
+            val version = obj.optInt("version", 1)
+            if (version != 1) {
+                throw IllegalArgumentException("unsupported_version")
+            }
+            val groupArray = obj.optJSONArray("customGroups")
+            if (groupArray != null) {
+                for (i in 0 until groupArray.length()) {
+                    val g = groupArray.getJSONObject(i)
+                    val key = g.optString("key")
+                    val name = g.optString("name")
+                    if (key.isNotBlank()) {
+                        customGroups.add(
+                            GroupUiModel(
+                                id = GroupId.Custom(key),
+                                name = if (name.isBlank()) key else name,
+                                count = 0,
+                                icon = Icons.Rounded.FolderOpen,
+                                isBuiltIn = false
+                            )
+                        )
+                    }
+                }
+            }
+            obj.getJSONArray("entries")
+        }
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             val id = obj.optString("id")
@@ -254,6 +310,7 @@ fun VaultScreen(
             val icon = obj.optString("iconEmoji")
             val username = obj.optString("username")
             val password = obj.optString("password")
+            if (id.isBlank() || name.isBlank()) continue
             val website = obj.opt("website")?.takeIf { it != JSONObject.NULL }?.toString()
             val note = obj.opt("note")?.takeIf { it != JSONObject.NULL }?.toString()
             val fields = mutableListOf<CustomFieldUiModel>()
@@ -264,20 +321,24 @@ fun VaultScreen(
                     fields.add(CustomFieldUiModel(f.optString("label"), f.optString("value")))
                 }
             }
-            list.add(
-                EntryDetailUiModel(
-                    id = id,
-                    name = name,
-                    iconEmoji = icon,
-                    username = username,
-                    password = password,
-                    website = website,
-                    note = note,
-                    customFields = fields
+            val groupId = parseGroupId(obj.optString("groupId"))
+            items.add(
+                ImportItem(
+                    detail = EntryDetailUiModel(
+                        id = id,
+                        name = name,
+                        iconEmoji = icon.ifBlank { "🔐" },
+                        username = username,
+                        password = password,
+                        website = website,
+                        note = note,
+                        customFields = fields
+                    ),
+                    groupId = groupId
                 )
             )
         }
-        return list
+        return ImportPayload(items, customGroups)
     }
 
     suspend fun reloadVaultData() {
@@ -466,17 +527,21 @@ fun VaultScreen(
                         }
                         scope.launch {
                             try {
-                                val items = parseJsonImport(raw)
-                                if (items.isEmpty()) {
+                                val payload = parseJsonImport(raw)
+                                if (payload.items.isEmpty()) {
                                     snackbarHostState.showSnackbar("导入内容为空")
                                 } else {
-                                    items.forEach { detail ->
+                                    payload.customGroups.forEach { group ->
+                                        repository.addGroup(group)
+                                    }
+                                    payload.items.forEach { item ->
+                                        val detail = item.detail
                                         val entry = EntryUiModel(
                                             id = detail.id,
                                             name = detail.name,
                                             iconEmoji = detail.iconEmoji,
-                                            groupId = GroupId.All,
-                                            isFavorite = false,
+                                            groupId = item.groupId,
+                                            isFavorite = item.groupId == GroupId.Favorites,
                                             isWeak = detail.password.length in 1..6,
                                             isRecent = true
                                         )
@@ -497,6 +562,8 @@ fun VaultScreen(
                                     snackbarHostState.showSnackbar("导入完成（已覆盖）")
                                     exportDialogVisible = false
                                 }
+                            } catch (e: IllegalArgumentException) {
+                                snackbarHostState.showSnackbar("导入失败：不支持的版本")
                             } catch (e: Exception) {
                                 snackbarHostState.showSnackbar("导入失败：格式不正确")
                             }
