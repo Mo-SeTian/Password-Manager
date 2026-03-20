@@ -1740,6 +1740,7 @@ private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFo
 
 @Composable
 private fun CopyableField(label: String, value: String, onCopy: (String, String) -> Unit, obscureSensitiveContent: Boolean) {
+    val blocked = obscureSensitiveContent
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(
@@ -1747,10 +1748,25 @@ private fun CopyableField(label: String, value: String, onCopy: (String, String)
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
         ) {
-            Row(modifier = Modifier.fillMaxWidth().clickable { onCopy(label, value) }.padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !blocked) { onCopy(label, value) }
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    if (blocked) "已隐藏" else value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (blocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
                 Spacer(modifier = Modifier.width(12.dp))
-                Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label", tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    Icons.Rounded.ContentCopy,
+                    contentDescription = if (blocked) "隐藏模式下不可复制" else "复制$label",
+                    tint = if (blocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -1761,6 +1777,7 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
     var visible by remember { mutableStateOf(false) }
     val shouldHide = obscureSensitiveContent || !visible
     val displayValue = if (shouldHide) "•".repeat(maxOf(8, value.length.coerceAtMost(16))) else value
+    val blocked = obscureSensitiveContent
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Surface(
@@ -1769,9 +1786,26 @@ private fun SecretCopyableField(label: String, value: String, onCopy: (String, S
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(displayValue, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).clickable { onCopy(label, value) })
-                IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = if (visible) "隐藏密码" else "显示密码") }
-                IconButton(onClick = { onCopy(label, value) }) { Icon(Icons.Rounded.ContentCopy, contentDescription = "复制$label") }
+                Text(
+                    displayValue,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (blocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f).clickable(enabled = !blocked) { onCopy(label, value) }
+                )
+                IconButton(onClick = { visible = !visible }, enabled = !blocked) {
+                    Icon(
+                        if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        contentDescription = if (visible) "隐藏密码" else "显示密码",
+                        tint = if (blocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(onClick = { onCopy(label, value) }, enabled = !blocked) {
+                    Icon(
+                        Icons.Rounded.ContentCopy,
+                        contentDescription = if (blocked) "隐藏模式下不可复制" else "复制$label",
+                        tint = if (blocked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }
