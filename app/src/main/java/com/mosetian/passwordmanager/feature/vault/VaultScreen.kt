@@ -1481,9 +1481,9 @@ private fun SecuritySettingsDialog(
                     onSettingsChange(settings.copy(biometricUnlockEnabled = it))
                 }, enabled = biometricEnabled)
                 if (!biometricAvailable) {
-                    Text("设备未配置生物识别", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("设备未配置生物识别，可先在系统设置中启用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else if (!settings.appLockEnabled) {
-                    Text("需先开启应用锁", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("需先开启应用锁后才能使用生物识别", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 SecuritySettingRow("自动清理剪贴板", settings.autoClearClipboardEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(autoClearClipboardEnabled = it))
