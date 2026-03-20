@@ -35,6 +35,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import org.json.JSONObject
 import org.json.JSONArray
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import android.view.autofill.AutofillManager
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -605,6 +609,27 @@ fun VaultScreen(
         )
     }
 
+    val isAutofillEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val manager = context.getSystemService(AutofillManager::class.java)
+        manager?.hasEnabledAutofillServices() == true
+    } else false
+
+    val onRequestAutofillSettings: () -> Unit = {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            scope.launch { snackbarHostState.showSnackbar("当前系统版本不支持自动填充") }
+        } else {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                scope.launch { snackbarHostState.showSnackbar("无法打开自动填充设置") }
+            }
+        }
+        Unit
+    }
+
     VaultScreenContent(
         uiState = uiState,
         securitySettings = securitySettings,
@@ -804,7 +829,9 @@ fun VaultScreen(
                 groupEditorForm = null
                 snackbarHostState.showSnackbar("已创建分组：${newGroup.name}")
             }
-        }
+        },
+        isAutofillEnabled = isAutofillEnabled,
+        onRequestAutofillSettings = onRequestAutofillSettings
     )
 
 
@@ -914,7 +941,9 @@ private fun VaultScreenContent(
     onSetAutofillDefault: (EntryDetailUiModel) -> Unit,
     onSetAutofillDefaultByEntryId: (String) -> Unit,
     onSaveEntry: (EntryEditorForm) -> Unit,
-    onSaveGroup: (GroupEditorForm) -> Unit
+    onSaveGroup: (GroupEditorForm) -> Unit,
+    isAutofillEnabled: Boolean,
+    onRequestAutofillSettings: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -1044,7 +1073,9 @@ private fun VaultScreenContent(
                     onRequestChangePassword = onRequestChangePassword,
                     onRequestDisableAppLock = onRequestDisableAppLock,
                     onOpenImportExport = onOpenImportExport,
-                    biometricAvailable = biometricAvailable
+                    biometricAvailable = biometricAvailable,
+                    onRequestAutofillSettings = onRequestAutofillSettings,
+                    isAutofillEnabled = isAutofillEnabled
                 )
             }
 
@@ -1433,7 +1464,9 @@ private fun SecuritySettingsDialog(
     onRequestChangePassword: () -> Unit,
     onRequestDisableAppLock: () -> Unit,
     onOpenImportExport: () -> Unit,
-    biometricAvailable: Boolean
+    biometricAvailable: Boolean,
+    isAutofillEnabled: Boolean,
+    onRequestAutofillSettings: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1496,7 +1529,9 @@ private fun SecuritySettingsDialog(
                         valueRange = 5f..120f
                     )
                 }
-                SecuritySettingRow("自动填充（预留）", false, onCheckedChange = { _ -> })
+                SecuritySettingRow("自动填充", isAutofillEnabled, onCheckedChange = {
+                    onRequestAutofillSettings()
+                })
                 SecuritySettingRow("阻止截图", settings.blockScreenshotsEnabled, onCheckedChange = {
                     onSettingsChange(settings.copy(blockScreenshotsEnabled = it))
                 })
