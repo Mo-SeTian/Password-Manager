@@ -256,6 +256,7 @@ fun VaultScreen(
             groupsArray.put(g)
         }
         val wrapper = JSONObject()
+        wrapper.put("schema", "password-manager-export-v1")
         wrapper.put("version", 1)
         wrapper.put("entries", array)
         wrapper.put("customGroups", groupsArray)
