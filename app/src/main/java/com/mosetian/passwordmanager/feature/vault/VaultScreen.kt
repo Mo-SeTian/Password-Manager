@@ -577,7 +577,21 @@ fun VaultScreen(
     if (exportConfirmVisible) {
         AlertDialog(
             onDismissRequest = { exportConfirmVisible = false },
-            confirmButton = { TextButton(onClick = { exportConfirmVisible = false }) { Text("完成") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(exportPayload))
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            if (securitySettings.autoClearClipboardEnabled) "已复制导出内容，${securitySettings.autoClearClipboardSeconds}秒后自动清空" else "已复制导出内容"
+                        )
+                        if (securitySettings.autoClearClipboardEnabled) {
+                            delay(securitySettings.autoClearClipboardSeconds * 1000L)
+                            clipboardManager.setText(AnnotatedString(""))
+                        }
+                    }
+                }) { Text("复制") }
+            },
+            dismissButton = { TextButton(onClick = { exportConfirmVisible = false }) { Text("完成") } },
             title = { Text("导出内容") },
             text = {
                 SelectionContainer {
