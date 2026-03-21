@@ -1546,6 +1546,11 @@ private fun SecuritySettingsDialog(
                 })
                 if (settings.autoLockOnBackgroundEnabled) {
                     Text("自动锁定延迟（秒）: ${settings.autoLockDelaySeconds}", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (settings.autoLockDelaySeconds == 0) "立即锁定，回到前台会取消等待" else "切到后台后等待 ${settings.autoLockDelaySeconds} 秒锁定",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Slider(
                         value = settings.autoLockDelaySeconds.toFloat(),
                         onValueChange = { onSettingsChange(settings.copy(autoLockDelaySeconds = it.toInt().coerceIn(0, 60))) },
@@ -1637,7 +1642,7 @@ private fun SecurityHintCard() {
             Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                "已启用敏感信息保护模式",
+                "已启用敏感信息保护模式，点击复制将被禁用",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
