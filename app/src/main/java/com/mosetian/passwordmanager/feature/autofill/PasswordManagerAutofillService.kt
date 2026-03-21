@@ -62,11 +62,28 @@ class PasswordManagerAutofillService : AutofillService() {
                 if (!lastEntryId.isNullOrBlank()) break
             }
             val matchResult = if (!domainKey.isNullOrBlank()) {
-                val matched = details.filter { detail ->
+                val normalizedTarget = normalizeDomain(domainKey)
+                // 三层匹配：精确匹配 > 子域名匹配 > 模糊关键词匹配
+                val exactMatches = details.filter { detail ->
                     val host = extractHost(detail.website)
-                    host != null && matchesDomain(host, domainKey)
+                    host != null && normalizeDomain(host) == normalizedTarget
                 }
-                if (matched.isNotEmpty()) matched else details
+                if (exactMatches.isNotEmpty()) exactMatches
+                else {
+                    val subdomainMatches = details.filter { detail ->
+                        val host = extractHost(detail.website)
+                        host != null && matchesDomain(host, domainKey)
+                    }
+                    if (subdomainMatches.isNotEmpty()) subdomainMatches
+                    else {
+                        // 模糊匹配：域名包含关键词
+                        val fuzzyMatches = details.filter { detail ->
+                            val host = extractHost(detail.website)
+                            host != null && normalizeDomain(host).contains(normalizedTarget.split(".").first())
+                        }
+                        if (fuzzyMatches.isNotEmpty()) fuzzyMatches else details
+                    }
+                }
             } else details
             val manualSelectionMode = !domainKey.isNullOrBlank() && matchResult.size == details.size
             val grouped = matchResult.groupBy { it.name.lowercase() }
@@ -74,7 +91,14 @@ class PasswordManagerAutofillService : AutofillService() {
             if (candidateKeys.isNotEmpty()) {
                 lastFillContexts[candidateKeys.first()] = candidateKeys
             }
+            val now = System.currentTimeMillis()
+            val sevenDays = 7 * 24 * 60 * 60 * 1000L
             val sorted = matchResult.sortedWith(compareByDescending<EntryDetailUiModel> { it.id == (lastEntryId ?: "") }
+                .thenByDescending {
+                    val lastUsed = usageMap[it.id] ?: 0L
+                    // 最近7天使用过的优先
+                    if (now - lastUsed < sevenDays) 2L else if (lastUsed > 0) 1L else 0L
+                }
                 .thenByDescending { usageMap[it.id] ?: 0L }
                 .thenBy { it.name })
             if (sorted.isEmpty()) {
@@ -90,7 +114,9 @@ class PasswordManagerAutofillService : AutofillService() {
                 val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2)
                 val label = if (manualSelectionMode) "手动 · ${detail.name}（记住）" else detail.name
                 presentation.setTextViewText(android.R.id.text1, label)
-                val subtitle = buildAutofillSubtitle(detail, domainKey, manualSelectionMode, detail.id == lastEntryId, hasDuplicates)
+                val lastUsed = usageMap[detail.id] ?: 0L
+                val isRecent = lastUsed > 0 && now - lastUsed < sevenDays
+                val subtitle = buildAutofillSubtitle(detail, domainKey, manualSelectionMode, detail.id == lastEntryId, hasDuplicates, isRecent)
                 presentation.setTextViewText(android.R.id.text2, subtitle)
                 val dataset = Dataset.Builder(presentation).apply {
                     fields.usernameId?.let { setValue(it, AutofillValue.forText(detail.username), presentation) }
@@ -220,11 +246,12 @@ class PasswordManagerAutofillService : AutofillService() {
         return normalizedHost.endsWith(".$normalizedDomain")
     }
 
-    private fun buildAutofillSubtitle(detail: EntryDetailUiModel, domainKey: String?, manualMode: Boolean, isDefault: Boolean, showUsername: Boolean): String {
+    private fun buildAutofillSubtitle(detail: EntryDetailUiModel, domainKey: String?, manualMode: Boolean, isDefault: Boolean, showUsername: Boolean, isRecent: Boolean): String {
         val host = extractHost(detail.website)
         val tag = when {
             manualMode -> "手动选择"
             isDefault -> "默认项"
+            isRecent -> "最近使用"
             else -> ""
         }
         val hostText = if (!host.isNullOrBlank()) "@${normalizeDomain(host)}" else ""
