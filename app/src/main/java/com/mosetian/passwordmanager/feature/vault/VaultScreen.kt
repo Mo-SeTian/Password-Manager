@@ -39,7 +39,16 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.view.autofill.AutofillManager
+import android.util.Base64
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
@@ -78,6 +87,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Divider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -168,6 +178,16 @@ fun VaultScreen(
     onRequestChangePassword: () -> Unit = {},
     onRequestDisableAppLock: () -> Unit = {}
 ) {
+    data class ImportItem(val detail: EntryDetailUiModel, val groupId: GroupId)
+    data class ImportPayload(val items: List<ImportItem>, val customGroups: List<GroupUiModel>)
+
+    data class EncryptedExport(
+        val payload: String,
+        val salt: String,
+        val iv: String,
+        val iterations: Int
+    )
+
     var selectedGroup by remember { mutableStateOf<GroupId>(GroupId.All) }
     var detailPanelState by remember { mutableStateOf(EntryDetailPanelState()) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
@@ -185,6 +205,14 @@ fun VaultScreen(
     var exportConfirmVisible by remember { mutableStateOf(false) }
     var exportPayload by remember { mutableStateOf("") }
     var importPayload by remember { mutableStateOf("") }
+    var exportPassword by remember { mutableStateOf("") }
+    var showExportPassword by remember { mutableStateOf(false) }
+    var importPassword by remember { mutableStateOf("") }
+    var showImportPassword by remember { mutableStateOf(false) }
+    var importPreviewVisible by remember { mutableStateOf(false) }
+    var importPreviewItems by remember { mutableStateOf<List<ImportItem>>(emptyList()) }
+    var importPreviewGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
+    var importPreviewPrepared by remember { mutableStateOf(false) }
     var selectedEntryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var recycleBinVisible by remember { mutableStateOf(false) }
     var pendingUndoEntryId by remember { mutableStateOf<String?>(null) }
@@ -209,9 +237,6 @@ fun VaultScreen(
     var customGroups by remember { mutableStateOf<List<GroupUiModel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
-
-    data class ImportItem(val detail: EntryDetailUiModel, val groupId: GroupId)
-    data class ImportPayload(val items: List<ImportItem>, val customGroups: List<GroupUiModel>)
 
     fun buildExportJson(entries: List<EntryUiModel>, details: Map<String, EntryDetailUiModel>): String {
         val array = JSONArray()
@@ -343,6 +368,51 @@ fun VaultScreen(
             )
         }
         return ImportPayload(items, customGroups)
+    }
+
+    fun buildEncryptedExport(raw: String, password: String): String {
+        val salt = ByteArray(16)
+        SecureRandom().nextBytes(salt)
+        val iv = ByteArray(12)
+        SecureRandom().nextBytes(iv)
+        val iterations = 120_000
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = PBEKeySpec(password.toCharArray(), salt, iterations, 256)
+        val tmp = factory.generateSecret(spec)
+        val secret = SecretKeySpec(tmp.encoded, "AES")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
+        val ciphertext = cipher.doFinal(raw.toByteArray(Charsets.UTF_8))
+        val payload = Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+        val wrapper = JSONObject()
+        wrapper.put("schema", "password-manager-export-v1")
+        wrapper.put("version", 1)
+        wrapper.put("encrypted", true)
+        wrapper.put("payload", payload)
+        wrapper.put("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
+        wrapper.put("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+        wrapper.put("iterations", iterations)
+        wrapper.put("exportedAt", System.currentTimeMillis())
+        return wrapper.toString(2)
+    }
+
+    fun maybeDecryptImport(raw: String, password: String?): String {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("[")) return raw
+        val obj = JSONObject(trimmed)
+        if (!obj.optBoolean("encrypted", false)) return raw
+        if (password.isNullOrBlank()) throw IllegalArgumentException("missing_password")
+        val salt = Base64.decode(obj.getString("salt"), Base64.NO_WRAP)
+        val iv = Base64.decode(obj.getString("iv"), Base64.NO_WRAP)
+        val iterations = obj.optInt("iterations", 120_000)
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = PBEKeySpec(password.toCharArray(), salt, iterations, 256)
+        val tmp = factory.generateSecret(spec)
+        val secret = SecretKeySpec(tmp.encoded, "AES")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, iv))
+        val plaintext = cipher.doFinal(Base64.decode(obj.getString("payload"), Base64.NO_WRAP))
+        return plaintext.toString(Charsets.UTF_8)
     }
 
     suspend fun reloadVaultData() {
@@ -505,16 +575,31 @@ fun VaultScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("导出后密码为明文，请妥善保存")
+                    OutlinedTextField(
+                        value = exportPassword,
+                        onValueChange = { exportPassword = it },
+                        label = { Text("导出口令（可选）") },
+                        placeholder = { Text("留空则导出明文 JSON") },
+                        visualTransformation = if (showExportPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showExportPassword = !showExportPassword }) {
+                                Icon(if (showExportPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = null)
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp)
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         TextButton(onClick = {
                             if (entries.isEmpty()) {
                                 scope.launch { snackbarHostState.showSnackbar("暂无可导出的数据") }
                             } else {
-                                exportPayload = buildExportJson(entries, detailCache)
+                                val raw = buildExportJson(entries, detailCache)
+                                exportPayload = if (exportPassword.isBlank()) raw else buildEncryptedExport(raw, exportPassword)
                                 exportConfirmVisible = true
                             }
                         }) { Text("导出 JSON") }
                     }
+                    Divider()
                     OutlinedTextField(
                         value = importPayload,
                         onValueChange = { importPayload = it },
@@ -523,7 +608,19 @@ fun VaultScreen(
                         maxLines = 10,
                         shape = RoundedCornerShape(16.dp)
                     )
-                    Text("支持旧版数组或新版带 version 的 JSON", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = importPassword,
+                        onValueChange = { importPassword = it },
+                        label = { Text("导入口令（加密导出时必填）") },
+                        visualTransformation = if (showImportPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showImportPassword = !showImportPassword }) {
+                                Icon(if (showImportPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = null)
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    Text("支持旧版数组、新版 version JSON 或加密导出", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         TextButton(onClick = { importPayload = "" }) { Text("清空") }
                         TextButton(onClick = {
@@ -534,48 +631,26 @@ fun VaultScreen(
                             }
                             scope.launch {
                                 try {
-                                    val payload = parseJsonImport(raw)
+                                    val decrypted = maybeDecryptImport(raw, importPassword)
+                                    val payload = parseJsonImport(decrypted)
                                     if (payload.items.isEmpty()) {
                                         snackbarHostState.showSnackbar("导入内容为空")
                                     } else {
-                                        payload.customGroups.forEach { group ->
-                                            repository.addGroup(group)
-                                        }
-                                        payload.items.forEach { item ->
-                                            val detail = item.detail
-                                            val entry = EntryUiModel(
-                                                id = detail.id,
-                                                name = detail.name,
-                                                iconEmoji = detail.iconEmoji,
-                                                groupId = item.groupId,
-                                                isFavorite = item.groupId == GroupId.Favorites,
-                                                isWeak = detail.password.length in 1..6,
-                                                isRecent = true
-                                            )
-                                            val entryDetail = EntryDetailUiModel(
-                                                id = detail.id,
-                                                name = detail.name,
-                                                iconEmoji = detail.iconEmoji,
-                                                username = detail.username,
-                                                password = detail.password,
-                                                website = detail.website,
-                                                note = detail.note,
-                                                customFields = detail.customFields
-                                            )
-                                            repository.upsertEntry(entry)
-                                            repository.upsertEntryDetail(entryDetail)
-                                        }
-                                        reloadVaultData()
-                                        snackbarHostState.showSnackbar("导入完成（已覆盖）")
-                                        exportDialogVisible = false
+                                        importPreviewItems = payload.items
+                                        importPreviewGroups = payload.customGroups
+                                        importPreviewVisible = true
                                     }
                                 } catch (e: IllegalArgumentException) {
-                                    snackbarHostState.showSnackbar("导入失败：不支持的版本")
+                                    if (e.message == "missing_password") {
+                                        snackbarHostState.showSnackbar("导入失败：需要导入口令")
+                                    } else {
+                                        snackbarHostState.showSnackbar("导入失败：不支持的版本")
+                                    }
                                 } catch (e: Exception) {
                                     snackbarHostState.showSnackbar("导入失败：格式不正确")
                                 }
                             }
-                        }) { Text("导入") }
+                        }) { Text("预览导入") }
                     }
                 }
             }
@@ -602,8 +677,71 @@ fun VaultScreen(
             dismissButton = { TextButton(onClick = { exportConfirmVisible = false }) { Text("完成") } },
             title = { Text("导出内容") },
             text = {
-                SelectionContainer {
-                    Text(exportPayload, style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SelectionContainer {
+                        Text(exportPayload, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (exportPassword.isNotBlank()) {
+                        Text("已加密导出，请妥善保存口令", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        )
+    }
+
+    if (importPreviewVisible) {
+        AlertDialog(
+            onDismissRequest = { importPreviewVisible = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        try {
+                            importPreviewGroups.forEach { group ->
+                                repository.addGroup(group)
+                            }
+                            importPreviewItems.forEach { item ->
+                                val detail = item.detail
+                                val entry = EntryUiModel(
+                                    id = detail.id,
+                                    name = detail.name,
+                                    iconEmoji = detail.iconEmoji,
+                                    groupId = item.groupId,
+                                    isFavorite = item.groupId == GroupId.Favorites,
+                                    isWeak = detail.password.length in 1..6,
+                                    isRecent = true
+                                )
+                                val entryDetail = EntryDetailUiModel(
+                                    id = detail.id,
+                                    name = detail.name,
+                                    iconEmoji = detail.iconEmoji,
+                                    username = detail.username,
+                                    password = detail.password,
+                                    website = detail.website,
+                                    note = detail.note,
+                                    customFields = detail.customFields
+                                )
+                                repository.upsertEntry(entry)
+                                repository.upsertEntryDetail(entryDetail)
+                            }
+                            reloadVaultData()
+                            snackbarHostState.showSnackbar("导入完成（已覆盖）")
+                            importPreviewVisible = false
+                            exportDialogVisible = false
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar("导入失败，请重试")
+                        }
+                    }
+                }) { Text("确认导入") }
+            },
+            dismissButton = { TextButton(onClick = { importPreviewVisible = false }) { Text("取消") } },
+            title = { Text("导入预览") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("即将导入 ${importPreviewItems.size} 条凭据")
+                    if (importPreviewGroups.isNotEmpty()) {
+                        Text("包含分组：${importPreviewGroups.joinToString { it.name }}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("将覆盖当前数据", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         )
