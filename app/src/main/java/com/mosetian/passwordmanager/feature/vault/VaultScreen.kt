@@ -2,6 +2,7 @@ package com.mosetian.passwordmanager.feature.vault
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -707,7 +708,7 @@ fun VaultScreen(
                                     iconEmoji = detail.iconEmoji,
                                     groupId = item.groupId,
                                     isFavorite = item.groupId == GroupId.Favorites,
-                                    isWeak = detail.password.length in 1..6,
+                                    isWeak = com.mosetian.passwordmanager.feature.security.PasswordStrength.isWeak(detail.password),
                                     isRecent = true
                                 )
                                 val entryDetail = EntryDetailUiModel(
@@ -929,7 +930,7 @@ fun VaultScreen(
                     groupId = targetGroup,
                     isFavorite = targetGroup == GroupId.Favorites,
                     isRecent = true,
-                    isWeak = form.password.length in 1..6
+                    isWeak = com.mosetian.passwordmanager.feature.security.PasswordStrength.isWeak(form.password)
                 )
                 val detail = EntryDetailUiModel(
                     id = entryId,
@@ -1578,6 +1579,10 @@ private fun EntryDetailOverlay(
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     CopyableField("账号", entry.username, onCopy, obscureSensitiveContent)
                     SecretCopyableField("密码", entry.password, onCopy, obscureSensitiveContent)
+                    val strength = com.mosetian.passwordmanager.feature.security.PasswordStrength.evaluate(entry.password)
+                    if (strength.level <= 2) {
+                        WeakPasswordWarningCard(strength = strength)
+                    }
                     entry.website?.let { CopyableField("网址", it, onCopy, obscureSensitiveContent) }
                     entry.note?.let { StaticField("备注", it) }
                     if (entry.customFields.isNotEmpty()) {
@@ -1789,6 +1794,38 @@ private fun SecurityHintCard() {
 }
 
 @Composable
+private fun WeakPasswordWarningCard(strength: com.mosetian.passwordmanager.feature.security.PasswordStrength) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFFFFEBEE),
+        modifier = Modifier.fillMaxWidth(),
+        border = androidx.compose.foundation.BorderStroke(1.dp, strength.color.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(strength.icon, contentDescription = null, tint = strength.color, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    "⚠️ 弱密码提醒",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = strength.color
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "当前密码强度为「${strength.label}」，${strength.description}。建议在编辑页面中更换为更复杂的密码。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF5D4037)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EntryEditorDialog(
     form: EntryEditorForm,
     groups: List<GroupUiModel>,
@@ -1852,6 +1889,7 @@ private fun EntryEditorDialog(
                 }
                 OutlinedTextField(form.username, { onFormChange(form.copy(username = it)) }, label = { Text("账号") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.password, { onFormChange(form.copy(password = it)) }, label = { Text("密码") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                PasswordStrengthIndicator(password = form.password)
                 OutlinedTextField(form.website, { onFormChange(form.copy(website = it)) }, label = { Text("网址") }, singleLine = true, shape = RoundedCornerShape(20.dp))
                 OutlinedTextField(form.note, { onFormChange(form.copy(note = it)) }, label = { Text("备注") }, minLines = 3, shape = RoundedCornerShape(20.dp))
                 Text("自定义字段", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -2008,4 +2046,55 @@ private fun CustomFieldRow(field: CustomFieldUiModel, onCopy: (String, String) -
     if (field.isSecret) SecretCopyableField(field.label, field.value, onCopy, obscureSensitiveContent)
     else if (field.copyable) CopyableField(field.label, field.value, onCopy, obscureSensitiveContent)
     else StaticField(field.label, field.value)
+}
+
+@Composable
+private fun PasswordStrengthIndicator(password: String) {
+    val strength = com.mosetian.passwordmanager.feature.security.PasswordStrength.evaluate(password)
+    val animatedProgress by animateFloatAsState(
+        targetValue = strength.level / 5f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+        label = "strength_progress"
+    )
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Icon(
+                strength.icon,
+                contentDescription = null,
+                tint = strength.color,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                strength.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = strength.color
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                strength.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            repeat(5) { index ->
+                val segmentColor = if (index < strength.level) {
+                    strength.color.copy(alpha = 0.25f + (index + 1) * 0.15f)
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                }
+                Surface(
+                    modifier = Modifier.weight(1f).height(4.dp),
+                    shape = RoundedCornerShape(2.dp),
+                    color = segmentColor
+                ) {}
+            }
+        }
+    }
 }
