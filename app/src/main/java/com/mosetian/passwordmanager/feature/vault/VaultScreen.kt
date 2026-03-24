@@ -982,11 +982,59 @@ fun VaultScreen(
             }
         },
         isAutofillEnabled = isAutofillEnabled,
-        onRequestAutofillSettings = onRequestAutofillSettings
+        onRequestAutofillSettings = onRequestAutofillSettings,
+        groupManagerVisible = groupManagerVisible,
+        groupEditorForm = groupEditorForm,
+        scope = scope,
+        repository = repository,
+        selectedGroup = selectedGroup,
+        onGroupManagerDismiss = { groupManagerVisible = false },
+        onGroupEditorFormChangeFromDialog = { form -> groupEditorForm = form },
+        onGroupSaveFromDialog = { form ->
+            scope.launch {
+                val key = form.key.ifBlank { form.name.lowercase().replace(" ", "-") }
+                val editingId = form.editingGroupId
+                if (editingId != null) {
+                    val updatedGroup = GroupUiModel(
+                        id = editingId,
+                        name = form.name.ifBlank { "新分组" },
+                        count = 0,
+                        icon = Icons.Rounded.FolderOpen,
+                        isBuiltIn = false,
+                        iconEmoji = form.iconEmoji.ifBlank { "📁" }
+                    )
+                    repository.updateGroup(updatedGroup)
+                    reloadVaultData()
+                    snackbarHostState.showSnackbar("已更新分组：${updatedGroup.name}")
+                } else {
+                    val newGroup = GroupUiModel(
+                        id = GroupId.Custom(key),
+                        name = form.name.ifBlank { "新分组" },
+                        count = 0,
+                        icon = Icons.Rounded.FolderOpen,
+                        isBuiltIn = false,
+                        iconEmoji = form.iconEmoji.ifBlank { "📁" }
+                    )
+                    repository.addGroup(newGroup)
+                    addLocalGroup(newGroup)
+                    selectedGroup = newGroup.id
+                    snackbarHostState.showSnackbar("已创建分组：${newGroup.name}")
+                }
+                groupEditorForm = null
+            }
+        },
+        onDeleteGroupFromDialog = { group ->
+            scope.launch {
+                repository.deleteGroup(group.id)
+                if (selectedGroup == group.id) {
+                    onSelectGroup(GroupId.All)
+                }
+                reloadVaultData()
+                snackbarHostState.showSnackbar("已删除分组「${group.name}」")
+            }
+        },
+        onReloadVaultData = { reloadVaultData() }
     )
-
-
-
 
     if (deleteConfirmVisible) {
         DeleteEntryDialog(
