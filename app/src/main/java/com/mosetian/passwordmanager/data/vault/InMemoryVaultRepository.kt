@@ -4,6 +4,7 @@ import com.mosetian.passwordmanager.feature.vault.model.DeletedEntryDetailUiMode
 import com.mosetian.passwordmanager.feature.vault.model.DeletedEntryUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryDetailUiModel
 import com.mosetian.passwordmanager.feature.vault.model.EntryUiModel
+import com.mosetian.passwordmanager.feature.vault.model.GroupId
 import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 import com.mosetian.passwordmanager.feature.vault.model.VaultMockData
 

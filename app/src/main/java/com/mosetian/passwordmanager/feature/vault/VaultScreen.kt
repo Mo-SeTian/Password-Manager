@@ -2,7 +2,6 @@ package com.mosetian.passwordmanager.feature.vault
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,8 +51,6 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -125,6 +122,7 @@ import com.mosetian.passwordmanager.feature.vault.model.GroupUiModel
 import com.mosetian.passwordmanager.feature.vault.model.toEditorForm
 import com.mosetian.passwordmanager.feature.vault.state.VaultStateFactory
 import com.mosetian.passwordmanager.feature.vault.state.VaultUiState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1097,7 +1095,17 @@ private fun VaultScreenContent(
     onSaveEntry: (EntryEditorForm) -> Unit,
     onSaveGroup: (GroupEditorForm) -> Unit,
     isAutofillEnabled: Boolean,
-    onRequestAutofillSettings: () -> Unit
+    onRequestAutofillSettings: () -> Unit,
+    groupManagerVisible: Boolean,
+    groupEditorForm: GroupEditorForm?,
+    scope: kotlinx.coroutines.CoroutineScope,
+    repository: VaultRepository,
+    selectedGroup: GroupId,
+    onGroupManagerDismiss: () -> Unit,
+    onGroupEditorFormChangeFromDialog: (GroupEditorForm) -> Unit,
+    onGroupSaveFromDialog: (GroupEditorForm) -> Unit,
+    onDeleteGroupFromDialog: (GroupUiModel) -> Unit,
+    onReloadVaultData: suspend () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -1211,35 +1219,34 @@ private fun VaultScreenContent(
                 val customGroups = uiState.groups.filter { it.id is GroupId.Custom }
                 GroupManagerDialog(
                     groups = customGroups,
-                    onDismiss = { groupManagerVisible = false },
+                    onDismiss = onGroupManagerDismiss,
                     onCreateGroup = {
-                        groupEditorForm = GroupEditorForm()
-                        groupManagerVisible = false
+                        onGroupEditorFormChangeFromDialog(GroupEditorForm())
+                        onGroupManagerDismiss()
                     },
                     onEditGroup = { group ->
-                        groupEditorForm = GroupEditorForm(
+                        onGroupEditorFormChangeFromDialog(GroupEditorForm(
                             editingGroupId = group.id,
                             name = group.name,
                             key = (group.id as? GroupId.Custom)?.value ?: "",
                             iconEmoji = group.iconEmoji.ifBlank { "📁" }
-                        )
-                        groupManagerVisible = false
+                        ))
+                        onGroupManagerDismiss()
                     },
                     onDeleteGroup = { group ->
-                        val key = (group.id as? GroupId.Custom)?.value ?: return@GroupManagerDialog
                         scope.launch {
-                            repository.deleteGroup(group.id)
+                            onDeleteGroupFromDialog(group)
                             if (selectedGroup == group.id) {
-                                selectedGroup = GroupId.All
+                                onSelectGroup(GroupId.All)
                             }
-                            reloadVaultData()
+                            onReloadVaultData()
                             snackbarHostState.showSnackbar("已删除分组「${group.name}」")
                         }
                     },
                     onMoveGroup = { group, direction ->
                         val allCustom = uiState.groups.filter { it.id is GroupId.Custom }
                         val idx = allCustom.indexOfFirst { it.id == group.id }
-                        val targetIdx = (idx + direction).coerceIn(0, allCustom.lastIndex)
+                        val targetIdx = (idx + direction).coerceIn(0, if (allCustom.isEmpty()) 0 else allCustom.lastIndex)
                         if (idx != targetIdx) {
                             val target = allCustom[targetIdx]
                             val updatedGroup = group.copy(sortOrder = targetIdx)
@@ -1247,14 +1254,14 @@ private fun VaultScreenContent(
                             scope.launch {
                                 repository.updateGroup(updatedGroup)
                                 repository.updateGroup(updatedTarget)
-                                reloadVaultData()
+                                onReloadVaultData()
                             }
                         }
                     }
                 )
             }
 
-            uiState.groupEditorForm?.let { form ->
+            groupEditorForm?.let { form ->
                 GroupEditorDialog(
                     form = form,
                     onDismiss = onDismissGroupEditor,
