@@ -52,6 +52,8 @@ import javax.crypto.spec.SecretKeySpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
@@ -1026,9 +1028,6 @@ fun VaultScreen(
         onDeleteGroupFromDialog = { group ->
             scope.launch {
                 repository.deleteGroup(group.id)
-                if (selectedGroup == group.id) {
-                    onSelectGroup(GroupId.All)
-                }
                 reloadVaultData()
                 snackbarHostState.showSnackbar("已删除分组「${group.name}」")
             }
@@ -1291,20 +1290,8 @@ private fun VaultScreenContent(
                             snackbarHostState.showSnackbar("已删除分组「${group.name}」")
                         }
                     },
-                    onMoveGroup = { group, direction ->
-                        val allCustom = uiState.groups.filter { it.id is GroupId.Custom }
-                        val idx = allCustom.indexOfFirst { it.id == group.id }
-                        val targetIdx = (idx + direction).coerceIn(0, if (allCustom.isEmpty()) 0 else allCustom.lastIndex)
-                        if (idx != targetIdx) {
-                            val target = allCustom[targetIdx]
-                            val updatedGroup = group.copy(sortOrder = targetIdx)
-                            val updatedTarget = target.copy(sortOrder = idx)
-                            scope.launch {
-                                repository.updateGroup(updatedGroup)
-                                repository.updateGroup(updatedTarget)
-                                onReloadVaultData()
-                            }
-                        }
+                    onMoveGroup = { _, _ ->
+                        // TODO: 实现分组排序（需要 GroupUiModel 支持 sortOrder）
                     }
                 )
             }
@@ -2220,10 +2207,10 @@ private fun GroupManagerItem(
             )
             Spacer(modifier = Modifier.width(4.dp))
             IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowUp, contentDescription = "上移", modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.ArrowUpward, contentDescription = "上移", modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowDown, contentDescription = "下移", modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.ArrowDownward, contentDescription = "下移", modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "编辑", modifier = Modifier.size(18.dp))
