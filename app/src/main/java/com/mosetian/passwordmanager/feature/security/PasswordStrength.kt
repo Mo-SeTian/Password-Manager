@@ -4,11 +4,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.ShieldMoon
-import androidx.compose.material.icons.rounded.ShieldAlert
-import androidx.compose.material.icons.rounded.ShieldCheck
-import androidx.compose.material.icons.rounded.ShieldLock
+import androidx.compose.material.icons.rounded.GppBad
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.GppGood
 
 /**
  * 密码强度枚举，按安全从低到高排序。
@@ -23,7 +22,7 @@ enum class PasswordStrength(
     VERY_WEAK(
         label = "极弱",
         description = "建议重设，极易被破解",
-        icon = Icons.Rounded.ShieldAlert,
+        icon = Icons.Rounded.GppBad,
         color = Color(0xFFD32F2F),
         level = 1
     ),
@@ -37,21 +36,21 @@ enum class PasswordStrength(
     FAIR(
         label = "中等",
         description = "基本可用，建议加强",
-        icon = Icons.Rounded.ShieldMoon,
+        icon = Icons.Rounded.Shield,
         color = Color(0xFFF57C00),
         level = 3
     ),
     GOOD(
         label = "良好",
         description = "推荐使用",
-        icon = Icons.Rounded.ShieldLock,
+        icon = Icons.Rounded.Lock,
         color = Color(0xFF388E3C),
         level = 4
     ),
     STRONG(
         label = "极强",
         description = "安全度高",
-        icon = Icons.Rounded.ShieldCheck,
+        icon = Icons.Rounded.GppGood,
         color = Color(0xFF1B5E20),
         level = 5
     );
