@@ -52,6 +52,8 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -193,6 +195,7 @@ fun VaultScreen(
     var detailPanelState by remember { mutableStateOf(EntryDetailPanelState()) }
     var editorForm by remember { mutableStateOf<EntryEditorForm?>(null) }
     var groupEditorForm by remember { mutableStateOf<GroupEditorForm?>(null) }
+    var groupManagerVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchMode by remember { mutableStateOf(false) }
     var securitySettings by remember(initialSecuritySettings) { mutableStateOf(initialSecuritySettings) }
@@ -558,6 +561,9 @@ fun VaultScreen(
     BackHandler(enabled = groupEditorForm != null) {
         groupEditorForm = null
     }
+    BackHandler(enabled = groupManagerVisible) {
+        groupManagerVisible = false
+    }
     BackHandler(enabled = securityPanelVisible) {
         securityPanelVisible = false
     }
@@ -803,7 +809,15 @@ fun VaultScreen(
                 editorForm = detail.toEditorForm(entryGroupById[detail.id] ?: GroupId.All)
             }
         },
-        onOpenGroupEditor = { groupEditorForm = GroupEditorForm() },
+        onOpenGroupEditor = { groupManagerVisible = true },
+        onLongPressGroup = { group ->
+            groupEditorForm = GroupEditorForm(
+                editingGroupId = group.id,
+                name = group.name,
+                key = (group.id as? GroupId.Custom)?.value ?: "",
+                iconEmoji = group.iconEmoji.ifBlank { "📁" }
+            )
+        },
         onOpenSecurityPanel = { securityPanelVisible = true },
         onDismissSecurityPanel = { securityPanelVisible = false },
         onSecuritySettingsChange = {
@@ -1056,6 +1070,7 @@ private fun VaultScreenContent(
     onAddEntry: () -> Unit,
     onEditEntry: () -> Unit,
     onOpenGroupEditor: () -> Unit,
+    onLongPressGroup: (GroupUiModel) -> Unit,
     onOpenSecurityPanel: () -> Unit,
     onDismissSecurityPanel: () -> Unit,
     onSecuritySettingsChange: (SecuritySettings) -> Unit,
@@ -1108,6 +1123,7 @@ private fun VaultScreenContent(
                     groups = uiState.groups,
                     selectedGroup = uiState.selectedGroup,
                     onGroupClick = onSelectGroup,
+                    onLongPressGroup = onLongPressGroup,
                     onManageGroups = onOpenGroupEditor,
                     onOpenSecurityPanel = onOpenSecurityPanel,
                     layoutDensity = layoutDensity
@@ -1191,6 +1207,53 @@ private fun VaultScreenContent(
                 )
             }
 
+            if (groupManagerVisible) {
+                val customGroups = uiState.groups.filter { it.id is GroupId.Custom }
+                GroupManagerDialog(
+                    groups = customGroups,
+                    onDismiss = { groupManagerVisible = false },
+                    onCreateGroup = {
+                        groupEditorForm = GroupEditorForm()
+                        groupManagerVisible = false
+                    },
+                    onEditGroup = { group ->
+                        groupEditorForm = GroupEditorForm(
+                            editingGroupId = group.id,
+                            name = group.name,
+                            key = (group.id as? GroupId.Custom)?.value ?: "",
+                            iconEmoji = group.iconEmoji.ifBlank { "📁" }
+                        )
+                        groupManagerVisible = false
+                    },
+                    onDeleteGroup = { group ->
+                        val key = (group.id as? GroupId.Custom)?.value ?: return@GroupManagerDialog
+                        scope.launch {
+                            repository.deleteGroup(group.id)
+                            if (selectedGroup == group.id) {
+                                selectedGroup = GroupId.All
+                            }
+                            reloadVaultData()
+                            snackbarHostState.showSnackbar("已删除分组「${group.name}」")
+                        }
+                    },
+                    onMoveGroup = { group, direction ->
+                        val allCustom = uiState.groups.filter { it.id is GroupId.Custom }
+                        val idx = allCustom.indexOfFirst { it.id == group.id }
+                        val targetIdx = (idx + direction).coerceIn(0, allCustom.lastIndex)
+                        if (idx != targetIdx) {
+                            val target = allCustom[targetIdx]
+                            val updatedGroup = group.copy(sortOrder = targetIdx)
+                            val updatedTarget = target.copy(sortOrder = idx)
+                            scope.launch {
+                                repository.updateGroup(updatedGroup)
+                                repository.updateGroup(updatedTarget)
+                                reloadVaultData()
+                            }
+                        }
+                    }
+                )
+            }
+
             uiState.groupEditorForm?.let { form ->
                 GroupEditorDialog(
                     form = form,
@@ -1227,6 +1290,7 @@ private fun LeftGroupsPane(
     groups: List<GroupUiModel>,
     selectedGroup: GroupId,
     onGroupClick: (GroupId) -> Unit,
+    onLongPressGroup: (GroupUiModel) -> Unit,
     onManageGroups: () -> Unit,
     onOpenSecurityPanel: () -> Unit,
     layoutDensity: VaultLayoutDensity
@@ -1274,12 +1338,16 @@ private fun LeftGroupsPane(
             ) {
                 items(primaryGroups) { group ->
                     val selected = group.id == selectedGroup
+                    val isCustom = group.id is GroupId.Custom
                     Text(
                         text = group.name,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { onGroupClick(group.id) }
+                            .combinedClickable(
+                                onClick = { onGroupClick(group.id) },
+                                onLongClick = { if (isCustom) onLongPressGroup(group) }
+                            )
                             .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else Color.Transparent)
                             .padding(horizontal = 8.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.labelLarge,
@@ -1941,17 +2009,175 @@ private fun EntryEditorDialog(
 private fun GroupEditorDialog(form: GroupEditorForm, onDismiss: () -> Unit, onFormChange: (GroupEditorForm) -> Unit, onSave: (GroupEditorForm) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onSave(form) }) { Text("创建分组") } },
+        confirmButton = { TextButton(onClick = { onSave(form) }) { Text(if (form.isEditing) "保存" else "创建分组") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        title = { Text("新建分组") },
+        title = { Text(if (form.isEditing) "编辑分组" else "新建分组") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(form.name, { onFormChange(form.copy(name = it)) }, label = { Text("分组名称") }, singleLine = true, shape = RoundedCornerShape(20.dp))
-                OutlinedTextField(form.key, { onFormChange(form.copy(key = it)) }, label = { Text("分组键值（可选）") }, singleLine = true, shape = RoundedCornerShape(20.dp))
-                OutlinedTextField(form.iconEmoji, { onFormChange(form.copy(iconEmoji = it)) }, label = { Text("图标 / Emoji（预留）") }, singleLine = true, shape = RoundedCornerShape(20.dp))
+                OutlinedTextField(
+                    form.name,
+                    { onFormChange(form.copy(name = it)) },
+                    label = { Text("分组名称") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp)
+                )
+                OutlinedTextField(
+                    form.iconEmoji,
+                    { onFormChange(form.copy(iconEmoji = it)) },
+                    label = { Text("图标 Emoji") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp)
+                )
+                if (!form.isEditing) {
+                    OutlinedTextField(
+                        form.key,
+                        { onFormChange(form.copy(key = it)) },
+                        label = { Text("分组键值（可选）") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
             }
         }
     )
+}
+
+@Composable
+private fun GroupManagerDialog(
+    groups: List<GroupUiModel>,
+    onDismiss: () -> Unit,
+    onCreateGroup: () -> Unit,
+    onEditGroup: (GroupUiModel) -> Unit,
+    onDeleteGroup: (GroupUiModel) -> Unit,
+    onMoveGroup: (GroupUiModel, Int) -> Unit
+) {
+    var confirmDelete by remember { mutableStateOf<GroupUiModel?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        title = { Text("管理分组") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // 固定分组提示
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "「全部」「常用」「最近」「弱密码」「回收站」为内置分组，不可编辑。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    if (groups.isEmpty()) {
+                        item {
+                            Text(
+                                "暂无自定义分组，点击下方按钮创建",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+                        }
+                    }
+                    items(groups) { group ->
+                        GroupManagerItem(
+                            group = group,
+                            onEdit = { onEditGroup(group) },
+                            onDelete = { confirmDelete = group },
+                            onMoveUp = { onMoveGroup(group, -1) },
+                            onMoveDown = { onMoveGroup(group, 1) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = onCreateGroup,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("新建分组")
+                }
+            }
+        }
+    )
+
+    if (confirmDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteGroup(confirmDelete!!)
+                    confirmDelete = null
+                }) {
+                    Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("确认删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("取消") } },
+            title = { Text("删除分组") },
+            text = { Text("确定要删除「${confirmDelete?.name}」吗？该分组下的所有凭据将移至「全部」。") }
+        )
+    }
+}
+
+@Composable
+private fun GroupManagerItem(
+    group: GroupUiModel,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(group.iconEmoji.ifBlank { "📁" }, style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                group.name,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "${group.count}条",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            IconButton(onClick = onMoveUp, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowUp, contentDescription = "上移", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onMoveDown, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowDown, contentDescription = "下移", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.Edit, contentDescription = "编辑", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
 }
 
 @Composable

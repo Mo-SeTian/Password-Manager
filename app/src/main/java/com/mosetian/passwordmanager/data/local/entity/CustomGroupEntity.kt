@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class CustomGroupEntity(
     @PrimaryKey val key: String,
     val name: String,
-    val iconName: String = "folder"
+    val iconEmoji: String = "📁",
+    val sortOrder: Int = 0
 )

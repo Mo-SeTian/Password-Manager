@@ -28,9 +28,9 @@ object VaultStateFactory {
             }
             group.copy(count = count)
         }
-        val customs = customGroups.map { group ->
-            group.copy(count = entries.count { it.groupId == group.id })
-        }
+        val customs = customGroups
+            .map { group -> group.copy(count = entries.count { it.groupId == group.id }) }
+            .sortedBy { (it.id as? GroupId.Custom)?.value ?: "" }
         return builtIns + customs
     }
 

@@ -23,7 +23,8 @@ data class GroupUiModel(
     val name: String,
     val count: Int,
     val icon: ImageVector,
-    val isBuiltIn: Boolean = true
+    val isBuiltIn: Boolean = true,
+    val iconEmoji: String = ""
 )
 
 data class EntryUiModel(
@@ -67,22 +68,25 @@ data class EntryEditorForm(
 )
 
 data class GroupEditorForm(
+    val editingGroupId: GroupId? = null,
     val name: String = "",
     val key: String = "",
     val iconEmoji: String = "📁"
-)
+) {
+    val isEditing: Boolean get() = editingGroupId != null
+}
 
 object VaultMockData {
     val builtInGroups = listOf(
-        GroupUiModel(GroupId.All, "全部", 0, Icons.Rounded.Folder, true),
-        GroupUiModel(GroupId.Favorites, "常用", 0, Icons.Rounded.Favorite, true),
-        GroupUiModel(GroupId.Recent, "最近", 0, Icons.Rounded.History, true),
-        GroupUiModel(GroupId.Weak, "弱密码", 0, Icons.Rounded.Shield, true),
-        GroupUiModel(GroupId.RecycleBin, "回收站", 0, Icons.Rounded.Delete, true)
+        GroupUiModel(GroupId.All, "全部", 0, Icons.Rounded.Folder, true, "📁"),
+        GroupUiModel(GroupId.Favorites, "常用", 0, Icons.Rounded.Favorite, true, "⭐"),
+        GroupUiModel(GroupId.Recent, "最近", 0, Icons.Rounded.History, true, "🕐"),
+        GroupUiModel(GroupId.Weak, "弱密码", 0, Icons.Rounded.Shield, true, "⚠️"),
+        GroupUiModel(GroupId.RecycleBin, "回收站", 0, Icons.Rounded.Delete, true, "🗑️")
     )
 
     val initialCustomGroups = listOf(
-        GroupUiModel(GroupId.Custom("work"), "工作", 0, Icons.Rounded.Key, false)
+        GroupUiModel(GroupId.Custom("work"), "工作", 0, Icons.Rounded.Key, false, "💼")
     )
 
     val initialEntries = listOf(

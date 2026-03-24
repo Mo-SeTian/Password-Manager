@@ -22,5 +22,7 @@ interface VaultRepository {
     suspend fun clearRecycleBin()
     suspend fun purgeDeletedEntries(olderThanMillis: Long)
     suspend fun addGroup(group: GroupUiModel)
+    suspend fun updateGroup(group: GroupUiModel)
+    suspend fun deleteGroup(groupId: GroupId)
     suspend fun migratePlaintextDataIfNeeded()
 }

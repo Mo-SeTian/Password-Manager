@@ -102,5 +102,21 @@ class InMemoryVaultRepository : VaultRepository {
         customGroups.add(group)
     }
 
+    override suspend fun updateGroup(group: GroupUiModel) {
+        val index = customGroups.indexOfFirst { it.id == group.id }
+        if (index >= 0) {
+            customGroups[index] = group
+        }
+    }
+
+    override suspend fun deleteGroup(groupId: GroupId) {
+        val key = (groupId as? GroupId.Custom)?.value ?: return
+        customGroups.removeAll { (it.id as? GroupId.Custom)?.value == key }
+        entries.removeAll { it.groupId == groupId }
+        entryDetails.removeAll { detail ->
+            entries.none { it.id == detail.id }
+        }
+    }
+
     override suspend fun migratePlaintextDataIfNeeded() = Unit
 }

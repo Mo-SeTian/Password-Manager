@@ -75,7 +75,8 @@ class PersistentVaultRepository(
                 name = cryptoManager.decrypt(it.name),
                 count = 0,
                 icon = Icons.Rounded.Folder,
-                isBuiltIn = false
+                isBuiltIn = false,
+                iconEmoji = it.iconEmoji
             )
         }
     }
@@ -203,12 +204,32 @@ class PersistentVaultRepository(
 
     override suspend fun addGroup(group: GroupUiModel) {
         val key = (group.id as? GroupId.Custom)?.value ?: return
+        val existing = customGroupDao.getAll()
+        val maxOrder = existing.maxOfOrNull { it.sortOrder } ?: -1
         customGroupDao.insert(
             CustomGroupEntity(
                 key = key,
-                name = cryptoManager.encrypt(group.name)
+                name = cryptoManager.encrypt(group.name),
+                iconEmoji = group.icon.name.ifBlank { "📁" },
+                sortOrder = maxOrder + 1
             )
         )
+    }
+
+    override suspend fun updateGroup(group: GroupUiModel) {
+        val key = (group.id as? GroupId.Custom)?.value ?: return
+        val existing = customGroupDao.getByKey(key) ?: return
+        customGroupDao.update(
+            key = key,
+            name = cryptoManager.encrypt(group.name),
+            iconEmoji = group.icon.name.ifBlank { existing.iconEmoji },
+            sortOrder = existing.sortOrder
+        )
+    }
+
+    override suspend fun deleteGroup(groupId: GroupId) {
+        val key = (groupId as? GroupId.Custom)?.value ?: return
+        customGroupDao.deleteByKey(key)
     }
 
     override suspend fun migratePlaintextDataIfNeeded() {
