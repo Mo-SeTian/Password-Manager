@@ -1327,6 +1327,7 @@ private fun VaultScreenContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LeftGroupsPane(
     groups: List<GroupUiModel>,
