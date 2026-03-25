@@ -21,7 +21,7 @@ import com.mosetian.passwordmanager.data.local.entity.EntryEntity
         DeletedEntryEntity::class,
         DeletedEntryDetailEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class PasswordManagerDatabase : RoomDatabase() {
