@@ -210,7 +210,7 @@ class PersistentVaultRepository(
             CustomGroupEntity(
                 key = key,
                 name = cryptoManager.encrypt(group.name),
-                iconEmoji = group.icon.name.ifBlank { "📁" },
+                iconEmoji = group.iconEmoji.ifBlank { "📁" },
                 sortOrder = maxOrder + 1
             )
         )
@@ -222,7 +222,7 @@ class PersistentVaultRepository(
         customGroupDao.update(
             key = key,
             name = cryptoManager.encrypt(group.name),
-            iconEmoji = group.icon.name.ifBlank { existing.iconEmoji },
+            iconEmoji = group.iconEmoji.ifBlank { existing.iconEmoji },
             sortOrder = existing.sortOrder
         )
     }
