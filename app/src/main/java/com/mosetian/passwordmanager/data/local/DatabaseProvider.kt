@@ -45,6 +45,13 @@ private val migration2To3 = object : Migration(2, 3) {
     }
 }
 
+private val migration3To4 = object : Migration(3, 4) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE custom_groups ADD COLUMN iconEmoji TEXT NOT NULL DEFAULT '📁'")
+        database.execSQL("ALTER TABLE custom_groups ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 object DatabaseProvider {
     private const val DATABASE_NAME = "password_manager.db"
 
@@ -57,7 +64,7 @@ object DatabaseProvider {
                 context.applicationContext,
                 PasswordManagerDatabase::class.java,
                 DATABASE_NAME
-            ).addMigrations(migration1To2, migration2To3).build().also { instance = it }
+            ).addMigrations(migration1To2, migration2To3, migration3To4).build().also { instance = it }
         }
     }
 
